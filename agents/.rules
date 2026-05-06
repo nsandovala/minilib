@@ -1,0 +1,6 @@
+# Global Agent Rules
+
+- One agent = one role
+- No agent modifies files outside declared scope
+- Fail loudly
+- All inputs/outputs declared in agent.yaml
