@@ -1,0 +1,1 @@
+# minilib-smart
