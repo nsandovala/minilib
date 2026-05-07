@@ -1,10 +1,15 @@
 'use client';
 
+import FilteredEntriesPage from '@/components/entries/FilteredEntriesPage';
+
 export default function AppointmentsPage() {
   return (
-    <main className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Citas</h1>
-      <p className="text-slate-400">En construcción</p>
-    </main>
+    <FilteredEntriesPage
+      title="Citas"
+      types={['appointment']}
+      searchPlaceholder="Buscar citas..."
+      emptyLabel="No hay citas registradas"
+      emptyHint="Las consultas y controles detectados por el parser viven aquí."
+    />
   );
 }

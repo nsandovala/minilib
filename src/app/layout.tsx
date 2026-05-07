@@ -5,12 +5,12 @@ import NotificationBanner from '@/components/ui/NotificationBanner';
 import AppInit from '@/components/ui/AppInit';
 
 export const metadata: Metadata = {
-  title: 'MiniLibreta',
-  description: 'Tu libreta personal, siempre contigo',
+  title: 'MiniLib',
+  description: 'Tu libreta viva contextual, siempre contigo',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    title: 'MiniLibreta',
+    title: 'Liev',
     statusBarStyle: 'black-translucent',
   },
 };

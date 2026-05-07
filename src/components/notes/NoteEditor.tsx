@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Note } from '@/types';
-import { addNote, updateNote } from '@/db/notes';
+import type { TimelineEntry } from '@/types';
+import { createEntry, updateEntry } from '@/db/entries';
 
 interface NoteEditorProps {
-  note?: Note;
+  note?: TimelineEntry;
   onSave: () => void;
   onCancel: () => void;
 }
@@ -23,7 +23,7 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
   useEffect(() => {
     if (note) {
       setTitle(note.title);
-      setBody(note.body);
+      setBody(note.text);
     }
   }, [note]);
 
@@ -32,9 +32,14 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
     setLoading(true);
     try {
       if (note?.id !== undefined) {
-        await updateNote(note.id, { title: title.trim(), body: body.trim() });
+        await updateEntry(note.id, { title: title.trim(), text: body.trim() });
       } else {
-        await addNote({ title: title.trim(), body: body.trim() });
+        await createEntry({
+          type: 'note',
+          title: title.trim(),
+          text: body.trim(),
+          tags: ['note'],
+        });
       }
       onSave();
     } catch {

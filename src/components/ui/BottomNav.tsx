@@ -5,6 +5,16 @@ import { usePathname } from 'next/navigation';
 
 const navItems = [
   {
+    href: '/',
+    label: 'Inicio',
+    icon: (
+      <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </svg>
+    ),
+  },
+  {
     href: '/notes',
     label: 'Notas',
     icon: (
@@ -28,7 +38,7 @@ const navItems = [
   },
   {
     href: '/meds',
-    label: 'Medicam.',
+    label: 'Salud',
     icon: (
       <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
         <path d="M10.5 20.5l10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
@@ -45,18 +55,6 @@ const navItems = [
         <line x1="16" y1="2" x2="16" y2="6" />
         <line x1="8" y1="2" x2="8" y2="6" />
         <line x1="3" y1="10" x2="21" y2="10" />
-      </svg>
-    ),
-  },
-  {
-    href: '/drawings',
-    label: 'Dibujos',
-    icon: (
-      <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 19l7-7 3 3-7 7-3-3z" />
-        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-        <path d="M2 2l7.586 7.586" />
-        <circle cx="11" cy="11" r="2" />
       </svg>
     ),
   },

@@ -1,31 +1,21 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Note } from '@/types';
-import { useNotes } from '@/hooks/useNotes';
-import { deleteNote } from '@/db/notes';
+import { useState } from 'react';
+import { deleteEntry } from '@/db/entries';
+import { useEntries } from '@/hooks/useEntries';
+import type { TimelineEntry } from '@/types';
 import NoteCard from '@/components/notes/NoteCard';
 import NoteEditor from '@/components/notes/NoteEditor';
 
 export default function NotesPage() {
-  const notes = useNotes();
-  const [showEditor, setShowEditor] = useState(false);
-  const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [search, setSearch] = useState('');
-
-  const filtered = useMemo(
-    () =>
-      notes.filter(
-        (n) =>
-          n.title.toLowerCase().includes(search.toLowerCase()) ||
-          n.body.toLowerCase().includes(search.toLowerCase())
-      ),
-    [notes, search]
-  );
+  const notes = useEntries({ types: ['note'], search });
+  const [showEditor, setShowEditor] = useState(false);
+  const [editingNote, setEditingNote] = useState<TimelineEntry | null>(null);
 
   const handleDelete = async (id: number) => {
     try {
-      await deleteNote(id);
+      await deleteEntry(id);
     } catch {
       /* silent */
     }
@@ -91,12 +81,12 @@ export default function NotesPage() {
       </div>
 
       <div className="flex flex-col gap-3" style={{ padding: '0 24px 24px' }}>
-        {filtered.length === 0 && search && (
+        {notes.length === 0 && search && (
           <div className="empty-state">
             Sin resultados para &quot;{search}&quot;
           </div>
         )}
-        {filtered.length === 0 && !search && (
+        {notes.length === 0 && !search && (
           <div className="empty-state">
             <p>Tu libreta está vacía</p>
             <p style={{ marginTop: '8px', fontSize: '13px' }}>
@@ -104,7 +94,7 @@ export default function NotesPage() {
             </p>
           </div>
         )}
-        {filtered.map((note) => (
+        {notes.map((note) => (
           <NoteCard
             key={note.id}
             note={note}

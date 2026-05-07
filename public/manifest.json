@@ -1,10 +1,11 @@
 {
-  "name": "MiniLibreta",
-  "short_name": "MiniLib",
+  "name": "MiniLib",
+  "short_name": "Liev",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#050508",
+  "theme_color": "#050508",
+  "description": "Tu libreta viva contextual, siempre contigo",
   "icons": [
     {
       "src": "/icons/icon-192.png",

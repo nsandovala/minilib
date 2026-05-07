@@ -1,11 +1,3 @@
-export interface Note {
-  id?: number;
-  title: string;
-  body: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 export interface Drawing {
   id?: number;
   title: string;
@@ -61,4 +53,37 @@ export interface ScheduledNotification {
   body: string;
   scheduledAt: Date;
   fired: boolean;
+}
+
+export type EntryType =
+  | 'note'
+  | 'task'
+  | 'reminder'
+  | 'health'
+  | 'appointment'
+  | 'payment'
+  | 'pet';
+
+export interface ParsedEntry {
+  text: string;
+  type: EntryType;
+  title: string;
+  date?: string;
+  time?: string;
+  tags: string[];
+  amount?: number;
+}
+
+export interface TimelineEntry {
+  id?: number;
+  text: string;
+  type: EntryType;
+  title: string;
+  date?: string | null;
+  time?: string | null;
+  tags: string[];
+  done: boolean;
+  createdAt: Date;
+  updatedAt?: Date | null;
+  amount?: number | null;
 }

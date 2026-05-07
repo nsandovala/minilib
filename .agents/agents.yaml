@@ -1,0 +1,42 @@
+project: MiniLib
+codename: Liev
+principle: backend-data-first
+
+mission: >
+  Transformar MiniLib en una libreta viva contextual para la vida cotidiana:
+  pendientes, gastos del hogar, salud, mascotas, pagos, citas y notas rápidas.
+
+rules:
+  - No mocks.
+  - No backend cloud todavía.
+  - No login todavía.
+  - No duplicar modelos.
+  - entries es la fuente única de verdad.
+  - UI consume core; core no depende de UI.
+  - IA visible mínima; inteligencia silenciosa.
+  - Cada cambio debe pasar npm run typecheck y npm run build.
+
+agents:
+  parser_agent:
+    role: Detecta intención, fecha, hora, monto, categoría y tipo de entrada.
+    output: ParsedEntry
+
+  normalizer_agent:
+    role: Limpia datos, normaliza montos, fechas, títulos y tags.
+    output: NormalizedEntry
+
+  timeline_agent:
+    role: Agrupa entradas por hoy, próximos días y sin fecha.
+    output: TimelineGroup[]
+
+  query_agent:
+    role: Resuelve consultas simples sobre entries.
+    output: QueryResult
+
+  safety_agent:
+    role: Detecta señales sensibles de salud, emergencia o riesgo financiero.
+    output: SafetyWarning[]
+
+  insights_agent:
+    role: Detecta patrones cotidianos sin invadir al usuario.
+    output: MicroInsight[]

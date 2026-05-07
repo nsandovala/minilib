@@ -1,10 +1,15 @@
 'use client';
 
+import FilteredEntriesPage from '@/components/entries/FilteredEntriesPage';
+
 export default function TodosPage() {
   return (
-    <main className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Tareas</h1>
-      <p className="text-slate-400">En construcción</p>
-    </main>
+    <FilteredEntriesPage
+      title="Tareas"
+      types={['task', 'reminder', 'payment']}
+      searchPlaceholder="Buscar tareas..."
+      emptyLabel="No hay tareas activas"
+      emptyHint="Agrega tareas, recordatorios o pagos desde la timeline principal."
+    />
   );
 }

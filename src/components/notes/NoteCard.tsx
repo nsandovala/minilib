@@ -1,10 +1,10 @@
 'use client';
 
-import { Note } from '@/types';
+import type { TimelineEntry } from '@/types';
 
 interface NoteCardProps {
-  note: Note;
-  onEdit: (note: Note) => void;
+  note: TimelineEntry;
+  onEdit: (note: TimelineEntry) => void;
   onDelete: (id: number) => void;
 }
 
@@ -65,7 +65,7 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
             overflow: 'hidden',
           }}
         >
-          {note.body}
+          {note.text}
         </p>
         <div
           style={{
@@ -82,7 +82,7 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
               color: 'var(--text-tertiary)',
             }}
           >
-            {formatRelativeDate(note.updatedAt)}
+            {formatRelativeDate(note.updatedAt ?? note.createdAt)}
           </span>
           <div style={{ display: 'flex', gap: '6px' }}>
             <button
