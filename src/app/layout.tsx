@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#050508',
+  themeColor: '#0b0a0d',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -32,12 +32,9 @@ export default function RootLayout({
     <html lang="es">
       <body>
         <div aria-hidden="true">
-          <div className="bg-orb bg-orb-1" />
-          <div className="bg-orb bg-orb-2" />
-          <div className="bg-orb bg-orb-3" />
-          <div className="bg-grid" />
+          <div className="bg-grain" />
         </div>
-        <main style={{ position: 'relative', zIndex: 1, paddingBottom: '88px' }}>
+        <main style={{ position: 'relative', zIndex: 1, paddingBottom: '72px' }}>
           {children}
         </main>
         <NotificationBanner />

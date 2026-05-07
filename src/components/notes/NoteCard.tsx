@@ -29,16 +29,16 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
       className="glass-card relative overflow-hidden cursor-pointer active:scale-[0.99]"
       style={{ transition: 'transform 0.15s ease' }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: '20%',
-          right: '20%',
-          height: '1px',
-          background: 'linear-gradient(90deg, transparent, rgba(59,130,246,0.4), transparent)',
-        }}
-      />
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: '20%',
+            right: '20%',
+            height: '1px',
+            background: 'linear-gradient(90deg, transparent, rgba(201,168,130,0.3), transparent)',
+          }}
+        />
       <div style={{ padding: '18px 20px' }}>
         <h3
           style={{

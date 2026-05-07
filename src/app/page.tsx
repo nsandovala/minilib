@@ -1,29 +1,55 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useMemo } from 'react';
 import { useEntries } from '@/hooks/useEntries';
+import { getPendingCount } from '@/core/queries/entry-queries';
 import UniversalInput from '@/components/UniversalInput';
 import TimelineView from '@/components/TimelineView';
 
 export default function HomePage() {
   const entries = useEntries();
-
-  const handleRefresh = useCallback(() => {
-    void 0;
-  }, []);
+  const pendingCount = useMemo(() => getPendingCount(entries), [entries]);
+  const handleRefresh = () => void 0;
 
   return (
     <div>
-      <div className="page-header" style={{ paddingBottom: '8px' }}>
-        <div>
-          <h1 className="page-title" style={{ fontSize: '28px' }}>
-            Liev
-          </h1>
-          <p className="page-subtitle">Tu libreta viva</p>
-        </div>
+      <div style={{ padding: '36px 24px 0' }}>
+        <h1
+          style={{
+            fontSize: '24px',
+            fontWeight: 600,
+            letterSpacing: '-0.02em',
+            color: 'var(--text-primary)',
+            margin: 0,
+          }}
+        >
+          Liev
+        </h1>
+        <p
+          style={{
+            fontSize: '12px',
+            color: 'var(--text-muted)',
+            marginTop: '4px',
+            fontWeight: 400,
+          }}
+        >
+          Una libreta tranquila para lo cotidiano
+        </p>
+        {pendingCount > 0 && (
+          <p
+            style={{
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              marginTop: '6px',
+              opacity: 0.7,
+            }}
+          >
+            {pendingCount} pendiente{pendingCount !== 1 ? 's' : ''}
+          </p>
+        )}
       </div>
 
-      <div style={{ marginBottom: '16px' }}>
+      <div style={{ marginTop: '16px' }}>
         <UniversalInput onEntryAdded={handleRefresh} />
       </div>
 

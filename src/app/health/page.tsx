@@ -3,15 +3,15 @@
 import FilteredEntriesPage from '@/components/entries/FilteredEntriesPage';
 import { getHealthEntries } from '@/core/queries/entry-queries';
 
-export default function MedsPage() {
+export default function HealthPage() {
   return (
     <FilteredEntriesPage
       title="Salud"
-      description="Vista legacy conectada al filtro combinado de salud y citas."
+      description="Remedios, controles y citas."
       filter={getHealthEntries}
       searchPlaceholder="Buscar salud..."
       emptyLabel="No hay registros de salud"
-      emptyHint="Los remedios, horarios y controles aparecerán aquí."
+      emptyHint="Los remedios y citas aparecerán aquí."
     />
   );
 }

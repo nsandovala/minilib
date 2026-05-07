@@ -9,6 +9,14 @@ interface UniversalInputProps {
   onEntryAdded: () => void;
 }
 
+const QUICK_CHIPS = [
+  { label: 'Compra', value: 'Comprar ' },
+  { label: 'Pago', value: 'Pagar ' },
+  { label: 'Salud', value: 'Tomar ' },
+  { label: 'Mascota', value: 'Comprar comida para ' },
+  { label: 'Casa', value: 'Comprar para la casa ' },
+];
+
 const TYPE_COLORS: Record<EntryType, string> = {
   note: 'var(--text-secondary)',
   task: 'var(--accent-primary)',
@@ -86,26 +94,29 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
     }
   };
 
+  const applyQuickChip = (value: string) => {
+    setText(value);
+    inputRef.current?.focus();
+  };
+
   return (
-    <div style={{ padding: '0 24px' }}>
+    <div style={{ padding: '0 20px' }}>
       <form onSubmit={handleSubmit}>
         <div
           className="glass-card"
           style={{
-            padding: '5px',
+            padding: '4px',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+            gap: '6px',
+            transition: 'border-color 0.2s ease',
             ...(justSaved
               ? {
-                  borderColor: 'rgba(95, 164, 123, 0.45)',
-                  boxShadow: '0 0 0 3px rgba(95, 164, 123, 0.14)',
+                  borderColor: 'rgba(122, 158, 126, 0.35)',
                 }
               : error
               ? {
-                  borderColor: 'rgba(208, 96, 96, 0.45)',
-                  boxShadow: '0 0 0 3px rgba(208, 96, 96, 0.14)',
+                  borderColor: 'rgba(196, 112, 112, 0.35)',
                 }
               : {}),
           }}
@@ -120,8 +131,8 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
               flex: 1,
               background: 'none',
               border: 'none',
-              padding: '13px 12px',
-              fontSize: '16px',
+              padding: '12px 10px',
+              fontSize: '15px',
               color: 'var(--text-primary)',
               outline: 'none',
             }}
@@ -132,18 +143,17 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
             disabled={!text.trim() || saving}
             className="tap-target"
             style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '16px',
-              background: text.trim() ? 'var(--accent-primary)' : 'var(--bg-surface)',
+              width: '38px',
+              height: '38px',
+              borderRadius: '12px',
+              background: text.trim() ? 'var(--accent-human)' : 'var(--bg-surface)',
               border: 'none',
               cursor: text.trim() ? 'pointer' : 'default',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: text.trim() ? '0 10px 22px rgba(95, 140, 255, 0.22)' : 'none',
-              transition: 'all 0.2s ease',
-              opacity: text.trim() ? 1 : 0.4,
+              transition: 'opacity 0.2s ease',
+              opacity: text.trim() ? 1 : 0.35,
               flexShrink: 0,
             }}
             aria-label="Guardar entrada"
@@ -151,21 +161,21 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
             {saving ? (
               <div
                 style={{
-                  width: '18px',
-                  height: '18px',
-                  border: '2px solid rgba(255,255,255,0.3)',
-                  borderTopColor: 'white',
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid rgba(17,16,15,0.2)',
+                  borderTopColor: 'var(--bg-void)',
                   borderRadius: '50%',
                   animation: 'spin 0.6s linear infinite',
                 }}
               />
             ) : (
               <svg
-                width="18"
-                height="18"
+                width="16"
+                height="16"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="white"
+                stroke="var(--bg-void)"
                 strokeWidth={2.5}
                 strokeLinecap="round"
               >
@@ -179,9 +189,9 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
 
       <p
         style={{
-          marginTop: '10px',
+          marginTop: '8px',
           paddingLeft: '4px',
-          fontSize: '12px',
+          fontSize: '11px',
           color: 'var(--text-muted)',
           letterSpacing: '0.01em',
         }}
@@ -189,11 +199,37 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
         Pagos, compras, salud, hogar, mascotas...
       </p>
 
+      <div
+        style={{
+          marginTop: '10px',
+          display: 'flex',
+          gap: '6px',
+          overflowX: 'auto',
+          paddingBottom: '2px',
+        }}
+      >
+        {QUICK_CHIPS.map((chip) => (
+          <button
+            key={chip.label}
+            type="button"
+            className="chip"
+            onClick={() => applyQuickChip(chip.value)}
+            style={{
+              fontSize: '11px',
+              padding: '4px 10px',
+              borderRadius: '14px',
+            }}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
       {error && (
         <div
           style={{
-            marginTop: '8px',
-            fontSize: '12px',
+            marginTop: '6px',
+            fontSize: '11px',
             color: 'var(--accent-danger)',
             paddingLeft: '4px',
           }}
@@ -205,18 +241,18 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
       {previewType && !error && (
         <div
           style={{
-            marginTop: '12px',
-            padding: '10px 14px',
+            marginTop: '8px',
+            padding: '8px 12px',
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            gap: '8px',
             animation: 'slide-down 0.2s ease-out',
           }}
         >
           <span
             style={{
-              width: '8px',
-              height: '8px',
+              width: '6px',
+              height: '6px',
               borderRadius: '50%',
               background: TYPE_COLORS[previewType],
               flexShrink: 0,
@@ -224,7 +260,7 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
           />
           <span
             style={{
-              fontSize: '12px',
+              fontSize: '11px',
               fontWeight: 500,
               color: TYPE_COLORS[previewType],
               textTransform: 'capitalize',
@@ -235,7 +271,7 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
           {previewAmount && (
             <span
               className="chip"
-              style={{ fontSize: '11px', padding: '3px 8px' }}
+              style={{ fontSize: '10px', padding: '2px 7px' }}
             >
               ${previewAmount.toLocaleString('es-CL')}
             </span>
@@ -243,7 +279,7 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
           {previewDate && (
             <span
               className="chip"
-              style={{ fontSize: '11px', padding: '3px 8px' }}
+              style={{ fontSize: '10px', padding: '2px 7px' }}
             >
               {formatDateShort(previewDate)}
             </span>
@@ -251,7 +287,7 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
           {previewTime && (
             <span
               className="chip"
-              style={{ fontSize: '11px', padding: '3px 8px' }}
+              style={{ fontSize: '10px', padding: '2px 7px' }}
             >
               {previewTime}
             </span>

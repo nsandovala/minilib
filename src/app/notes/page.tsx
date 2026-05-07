@@ -1,15 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { deleteEntry } from '@/db/entries';
 import { useEntries } from '@/hooks/useEntries';
+import { getNoteEntries, queryEntries } from '@/core/queries/entry-queries';
 import type { TimelineEntry } from '@/types';
 import NoteCard from '@/components/notes/NoteCard';
 import NoteEditor from '@/components/notes/NoteEditor';
 
 export default function NotesPage() {
   const [search, setSearch] = useState('');
-  const notes = useEntries({ types: ['note'], search });
+  const entries = useEntries();
+  const notes = useMemo(
+    () => queryEntries(getNoteEntries(entries), { search }),
+    [entries, search]
+  );
   const [showEditor, setShowEditor] = useState(false);
   const [editingNote, setEditingNote] = useState<TimelineEntry | null>(null);
 

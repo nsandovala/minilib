@@ -3,14 +3,18 @@
 import { useMemo, useState } from 'react';
 import TimelineView from '@/components/TimelineView';
 import { useEntries } from '@/hooks/useEntries';
-import type { EntryType } from '@/types';
+import { getPendingCount, getTotalAmount, queryEntries } from '@/core/queries/entry-queries';
+import type { QueryFilter } from '@/core/queries/entry-queries';
+import type { TimelineEntry } from '@/types';
 
 interface FilteredEntriesPageProps {
   title: string;
   emptyLabel: string;
   emptyHint: string;
   searchPlaceholder: string;
-  types: EntryType[];
+  description: string;
+  filter: (entries: TimelineEntry[]) => TimelineEntry[];
+  searchFilter?: Omit<QueryFilter, 'search'>;
 }
 
 export default function FilteredEntriesPage({
@@ -18,15 +22,24 @@ export default function FilteredEntriesPage({
   emptyLabel,
   emptyHint,
   searchPlaceholder,
-  types,
+  description,
+  filter,
+  searchFilter,
 }: FilteredEntriesPageProps) {
   const [search, setSearch] = useState('');
-  const entries = useEntries({ types, search });
+  const entries = useEntries();
+  const filteredEntries = useMemo(() => {
+    const baseEntries = filter(entries);
+    return queryEntries(baseEntries, { ...searchFilter, search });
+  }, [entries, filter, search, searchFilter]);
 
   const subtitle = useMemo(() => {
-    if (entries.length === 0) return emptyLabel;
-    return `${entries.length} elemento${entries.length === 1 ? '' : 's'}`;
-  }, [entries.length, emptyLabel]);
+    if (filteredEntries.length === 0) return emptyLabel;
+    return `${filteredEntries.length} elemento${filteredEntries.length === 1 ? '' : 's'}`;
+  }, [filteredEntries.length, emptyLabel]);
+
+  const totalAmount = useMemo(() => getTotalAmount(filteredEntries), [filteredEntries]);
+  const pendingCount = useMemo(() => getPendingCount(filteredEntries), [filteredEntries]);
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh' }}>
@@ -37,11 +50,51 @@ export default function FilteredEntriesPage({
         </div>
       </div>
 
-      <div style={{ padding: '0 24px 16px' }}>
+      <div style={{ padding: '0 20px 12px' }}>
+        <p
+          style={{
+            fontSize: '12px',
+            lineHeight: 1.5,
+            color: 'var(--text-secondary)',
+            marginBottom: '10px',
+            maxWidth: '34ch',
+          }}
+        >
+          {description}
+        </p>
+        {(pendingCount > 0 || totalAmount > 0) && (
+          <div
+            style={{
+              display: 'flex',
+              gap: '8px',
+              marginBottom: '10px',
+            }}
+          >
+            {pendingCount > 0 && (
+              <span className="chip" style={{ fontSize: '10px', padding: '3px 8px' }}>
+                {pendingCount} pendiente{pendingCount !== 1 ? 's' : ''}
+              </span>
+            )}
+            {totalAmount > 0 && (
+              <span
+                className="chip"
+                style={{
+                  fontSize: '10px',
+                  padding: '3px 8px',
+                  color: 'var(--accent-human)',
+                  borderColor: 'rgba(201, 168, 130, 0.18)',
+                }}
+              >
+                ${totalAmount.toLocaleString('es-CL')}
+              </span>
+            )}
+          </div>
+        )}
+
         <div style={{ position: 'relative' }}>
           <svg
-            width="15"
-            height="15"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="none"
             stroke="var(--text-tertiary)"
@@ -50,7 +103,7 @@ export default function FilteredEntriesPage({
             strokeLinejoin="round"
             style={{
               position: 'absolute',
-              left: '14px',
+              left: '12px',
               top: '50%',
               transform: 'translateY(-50%)',
               pointerEvents: 'none',
@@ -61,7 +114,7 @@ export default function FilteredEntriesPage({
           </svg>
           <input
             className="input-base"
-            style={{ paddingLeft: '40px' }}
+            style={{ paddingLeft: '36px', fontSize: '13px', padding: '9px 12px 9px 36px' }}
             placeholder={searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -69,13 +122,13 @@ export default function FilteredEntriesPage({
         </div>
       </div>
 
-      {entries.length === 0 ? (
-        <div className="empty-state" style={{ margin: '0 24px' }}>
-          <p>{emptyLabel}</p>
-          <p style={{ marginTop: '8px', fontSize: '13px' }}>{emptyHint}</p>
+      {filteredEntries.length === 0 ? (
+        <div className="empty-state" style={{ margin: '0 20px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{emptyLabel}</p>
+          <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>{emptyHint}</p>
         </div>
       ) : (
-        <TimelineView entries={entries} onRefresh={() => void 0} />
+        <TimelineView entries={filteredEntries} onRefresh={() => void 0} />
       )}
     </div>
   );

@@ -9,6 +9,55 @@ export interface QueryFilter {
   dateTo?: string;
 }
 
+const PURCHASE_TERMS = [
+  'compr',
+  'super',
+  'mercado',
+  'supermercado',
+  'feria',
+  'despensa',
+  'abarrote',
+  'hogar',
+  'casa',
+  'limpieza',
+  'detergente',
+  'papel higienico',
+  'papel higiénico',
+  'market',
+  'grocer',
+  'verdura',
+  'fruta',
+];
+
+const PET_TERMS = [
+  'mascota',
+  'perro',
+  'gato',
+  'vet',
+  'veterinario',
+  'vacuna',
+  'comida',
+  'alimento',
+  'correa',
+  'arena',
+];
+
+function normalizeText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function entryHaystack(entry: TimelineEntry): string {
+  return normalizeText([entry.title, entry.text, ...entry.tags].join(' '));
+}
+
+function matchesAnyTerm(entry: TimelineEntry, terms: string[]): boolean {
+  const haystack = entryHaystack(entry);
+  return terms.some((term) => haystack.includes(normalizeText(term)));
+}
+
 export function queryEntries(
   entries: TimelineEntry[],
   filter: QueryFilter
@@ -49,6 +98,51 @@ export function queryEntries(
   }
 
   return result;
+}
+
+export function getPurchaseEntries(entries: TimelineEntry[]): TimelineEntry[] {
+  return entries.filter((entry) => {
+    if (entry.type === 'payment' && matchesAnyTerm(entry, PURCHASE_TERMS)) return true;
+    if (entry.type === 'task' && matchesAnyTerm(entry, PURCHASE_TERMS)) return true;
+    return false;
+  });
+}
+
+export function getPaymentEntries(entries: TimelineEntry[]): TimelineEntry[] {
+  return entries.filter((entry) => entry.type === 'payment');
+}
+
+export function getHealthEntries(entries: TimelineEntry[]): TimelineEntry[] {
+  return entries.filter((entry) => entry.type === 'health' || entry.type === 'appointment');
+}
+
+export function getPetEntries(entries: TimelineEntry[]): TimelineEntry[] {
+  return entries.filter((entry) => entry.type === 'pet' || matchesAnyTerm(entry, PET_TERMS));
+}
+
+export function getNoteEntries(entries: TimelineEntry[]): TimelineEntry[] {
+  return entries.filter((entry) => entry.type === 'note');
+}
+
+export function getTodayEntries(entries: TimelineEntry[]): TimelineEntry[] {
+  const today = new Date().toISOString().split('T')[0];
+  return entries.filter((entry) => {
+    const createdAt = entry.createdAt.toISOString().split('T')[0];
+    return entry.date === today || createdAt === today;
+  });
+}
+
+export function getTotalAmount(entries: TimelineEntry[]): number {
+  return entries.reduce((total, entry) => total + (entry.amount ?? 0), 0);
+}
+
+export function getTodaySpend(entries: TimelineEntry[]): number {
+  return getTotalAmount(
+    getTodayEntries(entries).filter((entry) => {
+      const isMoneyEntry = entry.type === 'payment' || entry.type === 'pet' || matchesAnyTerm(entry, PURCHASE_TERMS);
+      return isMoneyEntry && typeof entry.amount === 'number';
+    })
+  );
 }
 
 export function countByType(entries: TimelineEntry[]): Record<EntryType, number> {

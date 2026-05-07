@@ -24,11 +24,11 @@ export default function TimelineView({ entries, onRefresh }: TimelineViewProps) 
 
   if (timeline.isEmpty) {
     return (
-      <div className="empty-state" style={{ padding: '64px 24px' }}>
-        <p style={{ fontSize: '16px', color: 'var(--text-secondary)' }}>
+      <div className="empty-state" style={{ padding: '40px 24px' }}>
+        <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
           Tu libreta está vacía
         </p>
-        <p style={{ marginTop: '8px', fontSize: '13px' }}>
+        <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
           Escribe algo arriba para empezar
         </p>
       </div>
@@ -36,7 +36,7 @@ export default function TimelineView({ entries, onRefresh }: TimelineViewProps) 
   }
 
   return (
-    <div style={{ padding: '16px 24px 24px' }}>
+    <div style={{ padding: '12px 20px 20px' }}>
       {timeline.groups.map((group) => (
         <TimelineGroup
           key={group.key}
@@ -57,21 +57,21 @@ interface TimelineGroupProps {
 
 function TimelineGroup({ label, entries, onAction }: TimelineGroupProps) {
   return (
-    <div style={{ marginBottom: '20px' }}>
+    <div style={{ marginBottom: '16px' }}>
       <h2
         style={{
-          fontSize: '12px',
+          fontSize: '11px',
           fontWeight: 600,
           color: 'var(--text-muted)',
           textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          marginBottom: '8px',
+          letterSpacing: '0.06em',
+          marginBottom: '6px',
           paddingLeft: '4px',
         }}
       >
         {label}
       </h2>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         {entries.map((entry) => (
           <TimelineItem key={entry.id} entry={entry} onAction={onAction} />
         ))}
@@ -102,24 +102,23 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
     <div
       className="glass-card"
       style={{
-        padding: '11px 13px',
+        padding: entry.done ? '8px 10px' : '9px 11px',
         display: 'flex',
         alignItems: 'flex-start',
-        gap: '10px',
-        opacity: entry.done ? 0.5 : 1,
+        gap: '8px',
+        opacity: entry.done ? 0.4 : 1,
         transition: 'opacity 0.2s ease',
       }}
     >
       <button
         type="button"
         onClick={handleToggle}
-        className="tap-target"
         style={{
-          width: '24px',
-          height: '24px',
-          borderRadius: '6px',
-          border: `2px solid ${TYPE_COLORS[entry.type]}`,
-          background: entry.done ? TYPE_COLORS[entry.type] : 'transparent',
+          width: '20px',
+          height: '20px',
+          borderRadius: '5px',
+          border: `1.5px solid ${entry.done ? 'var(--accent-human)' : 'var(--glass-border)'}`,
+          background: entry.done ? 'var(--accent-human)' : 'transparent',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
@@ -132,8 +131,8 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
       >
         {entry.done && (
           <svg
-            width="12"
-            height="12"
+            width="10"
+            height="10"
             viewBox="0 0 24 24"
             fill="none"
             stroke="var(--bg-void)"
@@ -147,21 +146,22 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
       </button>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '3px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
           <span
             style={{
-              width: '6px',
-              height: '6px',
+              width: '5px',
+              height: '5px',
               borderRadius: '50%',
               background: TYPE_COLORS[entry.type],
               flexShrink: 0,
+              opacity: entry.done ? 0.4 : 0.8,
             }}
           />
           <p
             style={{
               fontSize: '13px',
               fontWeight: 500,
-              color: 'var(--text-primary)',
+              color: entry.done ? 'var(--text-muted)' : 'var(--text-primary)',
               lineHeight: 1.3,
               textDecoration: entry.done ? 'line-through' : 'none',
               overflow: 'hidden',
@@ -173,11 +173,24 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          {typeof entry.amount === 'number' && (
+            <span
+              className="chip"
+              style={{
+                fontSize: '10px',
+                padding: '1px 6px',
+                color: 'var(--accent-human)',
+                borderColor: 'rgba(201, 168, 130, 0.18)',
+              }}
+            >
+              ${entry.amount.toLocaleString('es-CL')}
+            </span>
+          )}
           {entry.date && (
             <span
               style={{
-                fontSize: '11px',
+                fontSize: '10px',
                 fontFamily: 'var(--font-mono)',
                 color: 'var(--text-muted)',
               }}
@@ -188,7 +201,7 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
           {entry.time && (
             <span
               style={{
-                fontSize: '11px',
+                fontSize: '10px',
                 fontFamily: 'var(--font-mono)',
                 color: 'var(--text-muted)',
               }}
@@ -196,16 +209,6 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
               {entry.time}
             </span>
           )}
-          <span
-            style={{
-              fontSize: '10px',
-              color: TYPE_COLORS[entry.type],
-              textTransform: 'capitalize',
-              opacity: 0.78,
-            }}
-          >
-            {entry.type}
-          </span>
         </div>
       </div>
 
@@ -213,9 +216,9 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
         type="button"
         onClick={handleDelete}
         style={{
-          width: '28px',
-          height: '28px',
-          borderRadius: '6px',
+          width: '24px',
+          height: '24px',
+          borderRadius: '5px',
           background: 'transparent',
           border: 'none',
           cursor: 'pointer',
@@ -223,20 +226,20 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
-          opacity: 0.3,
+          opacity: 0.25,
           transition: 'opacity 0.15s ease',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.opacity = '1';
+          e.currentTarget.style.opacity = '0.8';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.opacity = '0.3';
+          e.currentTarget.style.opacity = '0.25';
         }}
         aria-label="Eliminar"
       >
         <svg
-          width="14"
-          height="14"
+          width="12"
+          height="12"
           viewBox="0 0 24 24"
           fill="none"
           stroke="var(--text-secondary)"

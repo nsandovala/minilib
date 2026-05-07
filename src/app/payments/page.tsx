@@ -3,15 +3,15 @@
 import FilteredEntriesPage from '@/components/entries/FilteredEntriesPage';
 import { getPaymentEntries } from '@/core/queries/entry-queries';
 
-export default function TodosPage() {
+export default function PaymentsPage() {
   return (
     <FilteredEntriesPage
       title="Pagos"
-      description="Vista legacy conectada al nuevo filtro de pagos del MVP."
+      description="Cuentas y servicios pendientes."
       filter={getPaymentEntries}
       searchPlaceholder="Buscar pagos..."
-      emptyLabel="No hay pagos registrados"
-      emptyHint="Escribe cuentas o servicios desde el inicio para verlos aquí."
+      emptyLabel="No hay pagos"
+      emptyHint="Anota cuentas o servicios para verlos aquí."
     />
   );
 }
