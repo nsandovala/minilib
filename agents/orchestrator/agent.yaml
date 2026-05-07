@@ -1,0 +1,12 @@
+name: orchestrator
+version: "1.0"
+commands:
+  - scaffold
+  - validate-db
+  - review
+  - test-gen
+  - release
+rules:
+  - Only execute declared commands
+  - Log every execution to agents/logs/YYYY-MM-DD.log
+  - Never modify main branch directly
