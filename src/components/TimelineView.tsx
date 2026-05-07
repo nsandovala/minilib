@@ -11,12 +11,12 @@ interface TimelineViewProps {
 
 const TYPE_COLORS: Record<EntryType, string> = {
   note: 'var(--text-secondary)',
-  task: 'var(--accent-blue)',
-  reminder: 'var(--accent-amber)',
-  health: '#10b981',
+  task: 'var(--accent-primary)',
+  reminder: 'var(--accent-warning)',
+  health: 'var(--accent-success)',
   appointment: 'var(--accent-violet)',
-  payment: '#f43f5e',
-  pet: '#f97316',
+  payment: 'var(--accent-human)',
+  pet: 'var(--accent-human)',
 };
 
 export default function TimelineView({ entries, onRefresh }: TimelineViewProps) {
@@ -57,15 +57,15 @@ interface TimelineGroupProps {
 
 function TimelineGroup({ label, entries, onAction }: TimelineGroupProps) {
   return (
-    <div style={{ marginBottom: '24px' }}>
+    <div style={{ marginBottom: '20px' }}>
       <h2
         style={{
           fontSize: '12px',
           fontWeight: 600,
-          color: 'var(--text-tertiary)',
+          color: 'var(--text-muted)',
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
-          marginBottom: '10px',
+          marginBottom: '8px',
           paddingLeft: '4px',
         }}
       >
@@ -102,10 +102,10 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
     <div
       className="glass-card"
       style={{
-        padding: '14px 16px',
+        padding: '11px 13px',
         display: 'flex',
         alignItems: 'flex-start',
-        gap: '12px',
+        gap: '10px',
         opacity: entry.done ? 0.5 : 1,
         transition: 'opacity 0.2s ease',
       }}
@@ -125,7 +125,7 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
-          marginTop: '2px',
+          marginTop: '1px',
           transition: 'all 0.15s ease',
         }}
         aria-label={entry.done ? 'Marcar pendiente' : 'Marcar completado'}
@@ -147,7 +147,7 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
       </button>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '3px' }}>
           <span
             style={{
               width: '6px',
@@ -159,7 +159,7 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
           />
           <p
             style={{
-              fontSize: '14px',
+              fontSize: '13px',
               fontWeight: 500,
               color: 'var(--text-primary)',
               lineHeight: 1.3,
@@ -179,7 +179,7 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
               style={{
                 fontSize: '11px',
                 fontFamily: 'var(--font-mono)',
-                color: 'var(--text-tertiary)',
+                color: 'var(--text-muted)',
               }}
             >
               {formatDateLabel(entry.date)}
@@ -190,7 +190,7 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
               style={{
                 fontSize: '11px',
                 fontFamily: 'var(--font-mono)',
-                color: 'var(--text-tertiary)',
+                color: 'var(--text-muted)',
               }}
             >
               {entry.time}
@@ -201,7 +201,7 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
               fontSize: '10px',
               color: TYPE_COLORS[entry.type],
               textTransform: 'capitalize',
-              opacity: 0.7,
+              opacity: 0.78,
             }}
           >
             {entry.type}

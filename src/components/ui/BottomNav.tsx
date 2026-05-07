@@ -67,16 +67,16 @@ export default function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-[100]" style={{ padding: '0 16px 24px' }}>
       <div
         style={{
-          background: 'rgba(10,10,16,0.85)',
-          border: '1px solid var(--border)',
+          background: 'linear-gradient(180deg, rgba(27, 24, 30, 0.88), rgba(18, 16, 21, 0.9))',
+          border: '1px solid var(--glass-border)',
           borderRadius: '28px',
-          backdropFilter: 'blur(24px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+          backdropFilter: 'blur(24px) saturate(135%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(135%)',
           padding: '8px',
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)',
+          boxShadow: '0 10px 34px rgba(0,0,0,0.26)',
         }}
       >
         {navItems.map((item) => {
@@ -87,8 +87,8 @@ export default function BottomNav() {
               href={item.href}
               className={`tap-target flex-col gap-1 rounded-2xl px-3 transition-colors duration-150 relative ${
                 isActive
-                  ? 'text-[var(--accent-blue)] bg-[rgba(59,130,246,0.12)]'
-                  : 'text-[var(--text-tertiary)]'
+                  ? 'text-[var(--accent-primary)] bg-[var(--accent-primary-soft)]'
+                  : 'text-[var(--text-muted)]'
               }`}
               style={{ textDecoration: 'none' }}
             >
@@ -102,8 +102,7 @@ export default function BottomNav() {
                     width: '3px',
                     height: '3px',
                     borderRadius: '50%',
-                    background: 'var(--accent-blue)',
-                    boxShadow: '0 0 6px var(--accent-blue)',
+                    background: 'var(--accent-primary)',
                     position: 'absolute',
                     bottom: '4px',
                   }}

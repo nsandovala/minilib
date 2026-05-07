@@ -11,12 +11,12 @@ interface UniversalInputProps {
 
 const TYPE_COLORS: Record<EntryType, string> = {
   note: 'var(--text-secondary)',
-  task: 'var(--accent-blue)',
-  reminder: 'var(--accent-amber)',
-  health: '#10b981',
+  task: 'var(--accent-primary)',
+  reminder: 'var(--accent-warning)',
+  health: 'var(--accent-success)',
   appointment: 'var(--accent-violet)',
-  payment: '#f43f5e',
-  pet: '#f97316',
+  payment: 'var(--accent-human)',
+  pet: 'var(--accent-human)',
 };
 
 const TYPE_LABELS: Record<EntryType, string> = {
@@ -92,20 +92,20 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
         <div
           className="glass-card"
           style={{
-            padding: '4px',
+            padding: '5px',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
             transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
             ...(justSaved
               ? {
-                  borderColor: 'rgba(16,185,129,0.4)',
-                  boxShadow: '0 0 0 3px rgba(16,185,129,0.15)',
+                  borderColor: 'rgba(95, 164, 123, 0.45)',
+                  boxShadow: '0 0 0 3px rgba(95, 164, 123, 0.14)',
                 }
               : error
               ? {
-                  borderColor: 'rgba(239,68,68,0.4)',
-                  boxShadow: '0 0 0 3px rgba(239,68,68,0.15)',
+                  borderColor: 'rgba(208, 96, 96, 0.45)',
+                  boxShadow: '0 0 0 3px rgba(208, 96, 96, 0.14)',
                 }
               : {}),
           }}
@@ -115,12 +115,12 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
             type="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="¿Qué necesitas sacar de tu mente?"
+            placeholder="¿Qué pendiente tienes?"
             style={{
               flex: 1,
               background: 'none',
               border: 'none',
-              padding: '14px 12px',
+              padding: '13px 12px',
               fontSize: '16px',
               color: 'var(--text-primary)',
               outline: 'none',
@@ -135,12 +135,13 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
               width: '44px',
               height: '44px',
               borderRadius: '16px',
-              background: text.trim() ? 'var(--accent-blue)' : 'var(--bg-surface)',
+              background: text.trim() ? 'var(--accent-primary)' : 'var(--bg-surface)',
               border: 'none',
               cursor: text.trim() ? 'pointer' : 'default',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              boxShadow: text.trim() ? '0 10px 22px rgba(95, 140, 255, 0.22)' : 'none',
               transition: 'all 0.2s ease',
               opacity: text.trim() ? 1 : 0.4,
               flexShrink: 0,
@@ -176,12 +177,24 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
         </div>
       </form>
 
+      <p
+        style={{
+          marginTop: '10px',
+          paddingLeft: '4px',
+          fontSize: '12px',
+          color: 'var(--text-muted)',
+          letterSpacing: '0.01em',
+        }}
+      >
+        Pagos, compras, salud, hogar, mascotas...
+      </p>
+
       {error && (
         <div
           style={{
             marginTop: '8px',
             fontSize: '12px',
-            color: '#f43f5e',
+            color: 'var(--accent-danger)',
             paddingLeft: '4px',
           }}
         >
@@ -206,7 +219,6 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
               height: '8px',
               borderRadius: '50%',
               background: TYPE_COLORS[previewType],
-              boxShadow: `0 0 8px ${TYPE_COLORS[previewType]}`,
               flexShrink: 0,
             }}
           />
