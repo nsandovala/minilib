@@ -46,51 +46,22 @@ export function detectType(tokens: ExtractedTokens): EntryType {
   return 'note';
 }
 
-function buildTitle(rawText: string, type: EntryType): string {
-  const lower = rawText.toLowerCase();
+function buildTitle(tokens: ExtractedTokens, type: EntryType): string {
+  // Use cleanedText: date/time/amount are already stripped, so the verb stays intact.
+  // e.g. "comprar cilantro mañana" → cleanedText = "comprar cilantro" → "Comprar cilantro"
+  const base = tokens.cleanedText.trim() || tokens.rawText.trim();
+  if (!base) return tokens.rawText.trim();
 
-  if (type === 'payment') {
-    const match =
-      lower.match(
-        /pagar\s+(.+?)(?:\s+(?:el|para|en|de)\s+(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|hoy|mañana|manana|\d))/i
-      ) || lower.match(/pagar\s+(.+?)(?:\s+(?:a|en|de|para)\s)/i);
-    if (match) return `Pagar ${match[1].trim()}`;
-    const payMatch = lower.match(/pagar\s+(.+)/i);
-    if (payMatch) return `Pagar ${payMatch[1].trim()}`;
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  if (type === 'payment' && !/\bpagar?\b/i.test(base)) {
+    return `Pagar ${base}`;
+  }
+  if (type === 'health' && !/\b(tomar|aplicar|poner)\b/i.test(base)) {
+    return `Tomar ${base}`;
   }
 
-  if (type === 'pet') {
-    const match = lower.match(
-      /(?:comida|comprar|llevar|dar)\s+(.+?)(?:\s+(?:para|al|del|el|mañana|manana|hoy|lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|\d))/i
-    );
-    if (match) return match[1].trim();
-  }
-
-  if (type === 'health') {
-    const match = lower.match(
-      /(?:tomar)\s+(.+?)(?:\s+(?:a|en|de|para|el|la|los|las|hoy|mañana|manana|\d))/i
-    );
-    if (match) return `Tomar ${match[1].trim()}`;
-  }
-
-  if (type === 'appointment') {
-    const match = lower.match(
-      /(?:cita|consulta|doctor|doctora|médico|medico)\s+(.+?)(?:\s+(?:el|para|en|de|a|la|las|hoy|mañana|manana|lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|\d))/i
-    );
-    if (match) return `Cita: ${match[1].trim()}`;
-    const citaMatch = lower.match(/cita\s+(.+)/i);
-    if (citaMatch) return `Cita: ${citaMatch[1].trim()}`;
-  }
-
-  if (type === 'task') {
-    const match = lower.match(
-      /^(?:comprar|llevar|sacar|hacer|limpiar|lavar|cocinar|preparar|arreglar|revisar|cambiar|ir\s+a|pasar\s+por|buscar|entregar|devolver|agendar)\s+(.+?)(?:\s+(?:el|para|en|de|a|la|las|hoy|mañana|manana|lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo|\d|a\s+las))/i
-    );
-    if (match) return match[1].trim();
-  }
-
-  const words = rawText.split(' ').slice(0, 6).join(' ');
-  return words.length > 50 ? words.slice(0, 50) + '...' : words || rawText;
+  return cap(base);
 }
 
 function buildTags(rawText: string, type: EntryType): string[] {
@@ -109,7 +80,7 @@ function buildTags(rawText: string, type: EntryType): string[] {
 
 export function normalizeEntry(tokens: ExtractedTokens): ParsedEntry {
   const type = detectType(tokens);
-  const title = buildTitle(tokens.rawText, type);
+  const title = buildTitle(tokens, type);
   const tags = buildTags(tokens.rawText, type);
 
   return {
