@@ -9,14 +9,6 @@ interface UniversalInputProps {
   onEntryAdded: () => void;
 }
 
-const QUICK_CHIPS = [
-  { label: 'Compra', value: 'Comprar ' },
-  { label: 'Pago', value: 'Pagar ' },
-  { label: 'Salud', value: 'Tomar ' },
-  { label: 'Mascota', value: 'Comprar comida para ' },
-  { label: 'Casa', value: 'Comprar para la casa ' },
-];
-
 const TYPE_COLORS: Record<EntryType, string> = {
   note: 'var(--text-secondary)',
   task: 'var(--accent-primary)',
@@ -92,11 +84,6 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
     } finally {
       setSaving(false);
     }
-  };
-
-  const applyQuickChip = (value: string) => {
-    setText(value);
-    inputRef.current?.focus();
   };
 
   return (
@@ -198,32 +185,6 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
       >
         Pagos, compras, salud, hogar, mascotas...
       </p>
-
-      <div
-        style={{
-          marginTop: '10px',
-          display: 'flex',
-          gap: '6px',
-          overflowX: 'auto',
-          paddingBottom: '2px',
-        }}
-      >
-        {QUICK_CHIPS.map((chip) => (
-          <button
-            key={chip.label}
-            type="button"
-            className="chip"
-            onClick={() => applyQuickChip(chip.value)}
-            style={{
-              fontSize: '11px',
-              padding: '4px 10px',
-              borderRadius: '14px',
-            }}
-          >
-            {chip.label}
-          </button>
-        ))}
-      </div>
 
       {error && (
         <div

@@ -48,28 +48,42 @@ function getNextDayOfWeek(dayIndex: number): string {
 }
 
 function extractTime(text: string): { time: string | null; cleaned: string } {
+  // Prefix-based: "a las 9", "al 9am", "desde las 3pm"
   const match = text.match(
     /(?:a\s+las?|al?|desde)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i
   );
-  if (!match) return { time: null, cleaned: text };
-
-  let raw = match[1].trim().toLowerCase();
-  const hasAmPm = /am|pm/.test(raw);
-  raw = raw.replace(/\s*(am|pm)\s*/i, '');
-  const parts = raw.split(':');
-  let hours = parseInt(parts[0], 10);
-  const minutes = parts[1] ? parseInt(parts[1], 10) : 0;
-
-  if (hasAmPm) {
-    const isPm = /pm/.test(match[1].toLowerCase());
-    if (isPm && hours < 12) hours += 12;
-    if (!isPm && hours === 12) hours = 0;
+  if (match) {
+    let raw = match[1].trim().toLowerCase();
+    const hasAmPm = /am|pm/.test(raw);
+    raw = raw.replace(/\s*(am|pm)\s*/i, '');
+    const parts = raw.split(':');
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1] ? parseInt(parts[1], 10) : 0;
+    if (hasAmPm) {
+      const isPm = /pm/.test(match[1].toLowerCase());
+      if (isPm && hours < 12) hours += 12;
+      if (!isPm && hours === 12) hours = 0;
+    }
+    const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    const cleaned = text.replace(match[0], '').replace(/\s+/g, ' ').trim();
+    return { time, cleaned };
   }
 
-  const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-  const cleaned = text.replace(match[0], '').replace(/\s+/g, ' ').trim();
+  // Bare am/pm: "9am", "3:30pm", "10am"
+  const bareMatch = text.match(/\b(\d{1,2}(?::\d{2})?)\s*(am|pm)\b/i);
+  if (bareMatch) {
+    const parts = bareMatch[1].split(':');
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1] ? parseInt(parts[1], 10) : 0;
+    const isPm = /pm/i.test(bareMatch[2]);
+    if (isPm && hours < 12) hours += 12;
+    if (!isPm && hours === 12) hours = 0;
+    const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    const cleaned = text.replace(bareMatch[0], '').replace(/\s+/g, ' ').trim();
+    return { time, cleaned };
+  }
 
-  return { time, cleaned };
+  return { time: null, cleaned: text };
 }
 
 function extractDate(text: string): { date: string | null; cleaned: string } {

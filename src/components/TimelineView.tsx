@@ -3,6 +3,7 @@
 import type { TimelineEntry, EntryType } from '@/types';
 import { toggleEntryDone, deleteEntry } from '@/db/entries';
 import { buildTimeline } from '@/core/agents/timeline-agent';
+import { formatRelativeDate, formatCLP, isOverdue as checkOverdue } from '@/lib/entries';
 
 interface TimelineViewProps {
   entries: TimelineEntry[];
@@ -22,29 +23,23 @@ const TYPE_COLORS: Record<EntryType, string> = {
 const TYPE_LABELS: Record<EntryType, string> = {
   payment:     'pago',
   health:      'salud',
-  appointment: 'cita',
-  reminder:    'recordatorio',
+  appointment: 'salud',
+  reminder:    'tarea',
   task:        'tarea',
   pet:         'mascota',
   note:        'nota',
 };
 
-function formatDateShort(dateStr: string): string {
-  const today = new Date().toISOString().split('T')[0];
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
-  if (dateStr === today) return 'hoy';
-  if (dateStr === tomorrowStr) return 'mañana';
-
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric' });
-}
-
-function formatAmount(amount: number): string {
-  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
-}
+const GENERIC_TITLE_WORDS = new Set([
+  '',
+  'comprar',
+  'para',
+  'pagar',
+  'tomar',
+  'hacer',
+  'nota',
+  'recordatorio',
+]);
 
 function withAlpha(color: string, alpha: number): string {
   if (color.startsWith('#') && color.length === 7) {
@@ -56,6 +51,54 @@ function withAlpha(color: string, alpha: number): string {
   const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
   if (m) return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${alpha})`;
   return color;
+}
+
+function normalizeText(value?: string | null): string {
+  return (value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function isGenericTitle(title: string): boolean {
+  const normalized = normalizeText(title).toLowerCase();
+  return GENERIC_TITLE_WORDS.has(normalized) || normalized.length <= 2;
+}
+
+function looksLikePurchase(entry: TimelineEntry): boolean {
+  const haystack = `${entry.title} ${entry.text}`.toLowerCase();
+  return /\b(comprar|compra|supermercado|feria|mercado)\b/.test(haystack);
+}
+
+function getDisplayType(entry: TimelineEntry): string {
+  if (entry.type === 'payment') return TYPE_LABELS.payment;
+  if (entry.type === 'health' || entry.type === 'appointment') return TYPE_LABELS[entry.type];
+  if (entry.type === 'pet') return TYPE_LABELS.pet;
+  if (entry.type === 'note') return TYPE_LABELS.note;
+  if (looksLikePurchase(entry)) return 'compra';
+  return TYPE_LABELS[entry.type];
+}
+
+function getDisplayTitle(entry: TimelineEntry): string {
+  const normalizedTitle = normalizeText(entry.title);
+  const normalizedText = normalizeText(entry.text);
+
+  if (!normalizedTitle || isGenericTitle(normalizedTitle)) {
+    return normalizedText || normalizedTitle || 'Sin contenido';
+  }
+
+  return normalizedTitle;
+}
+
+function getSecondaryText(entry: TimelineEntry, displayTitle: string): string | null {
+  const normalizedText = normalizeText(entry.text);
+  if (!normalizedText) return null;
+
+  const normalizedDisplayTitle = normalizeText(displayTitle).toLowerCase();
+  const lowerText = normalizedText.toLowerCase();
+
+  if (lowerText === normalizedDisplayTitle) return null;
+  if (isGenericTitle(normalizedText)) return null;
+  if (normalizedText.length < 5) return null;
+
+  return normalizedText;
 }
 
 export default function TimelineView({ entries, onRefresh }: TimelineViewProps) {
@@ -138,25 +181,31 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
   };
 
   const color = TYPE_COLORS[entry.type];
-  const label = TYPE_LABELS[entry.type];
-  const today = new Date().toISOString().split('T')[0];
-  const isOverdue = !entry.done && !!entry.date && entry.date < today;
+  const label = getDisplayType(entry);
+  const entryIsOverdue = checkOverdue(entry);
+  const displayTitle = getDisplayTitle(entry);
+  const secondaryText = getSecondaryText(entry, displayTitle);
 
-  const hasContext =
-    typeof entry.amount === 'number' ||
+  // Tags beyond the auto-injected type tag (e.g. 'urgente', 'recurrente')
+  const extraTags = entry.tags.filter((t) => t !== entry.type);
+
+  const dateLabel = entry.date ? formatRelativeDate(entry.date) : null;
+  const hasMeta =
+    !!dateLabel ||
     !!entry.time ||
-    (!!entry.date && entry.date !== today) ||
-    isOverdue;
+    typeof entry.amount === 'number' ||
+    entryIsOverdue ||
+    extraTags.length > 0;
 
   return (
     <div
       className="glass-card"
       style={{
-        padding: '11px 14px',
+        padding: '12px 14px',
         display: 'flex',
         gap: '10px',
         alignItems: 'flex-start',
-        opacity: entry.done ? 0.38 : 1,
+        opacity: entry.done ? 0.55 : 1,
         transition: 'opacity 0.2s ease',
       }}
     >
@@ -198,135 +247,138 @@ function TimelineItem({ entry, onAction }: TimelineItemProps) {
 
       {/* Content */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Row 1: type badge + title */}
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
-            marginBottom: hasContext ? '4px' : 0,
+            alignItems: 'flex-start',
+            gap: '8px',
+            marginBottom: hasMeta || secondaryText ? '6px' : 0,
           }}
         >
           <span
             style={{
               fontSize: '10px',
-              padding: '1px 7px',
-              borderRadius: '10px',
+              padding: '2px 7px',
+              borderRadius: '999px',
               border: `1px solid ${withAlpha(color, 0.2)}`,
               background: withAlpha(color, 0.08),
               color,
-              marginRight: '6px',
               flexShrink: 0,
-              lineHeight: 1.6,
+              lineHeight: 1.5,
+              marginTop: '1px',
+              textTransform: 'lowercase',
             }}
           >
             {label}
           </span>
-          <p
-            style={{
-              flex: 1,
-              fontSize: '13px',
-              fontWeight: entry.done ? 400 : 500,
-              color: entry.done ? 'var(--text-muted)' : 'var(--text-primary)',
-              textDecoration: entry.done ? 'line-through' : 'none',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              margin: 0,
-              lineHeight: 1.4,
-            }}
-          >
-            {entry.title}
-          </p>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p
+              style={{
+                fontSize: '13px',
+                fontWeight: entry.done ? 400 : 500,
+                color: entry.done ? 'var(--text-secondary)' : 'var(--text-primary)',
+                textDecoration: entry.done ? 'line-through' : 'none',
+                margin: 0,
+                lineHeight: 1.4,
+                wordBreak: 'break-word',
+              }}
+            >
+              {displayTitle}
+            </p>
+            {secondaryText && (
+              <p
+                style={{
+                  margin: '3px 0 0',
+                  fontSize: '11px',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.45,
+                  wordBreak: 'break-word',
+                }}
+              >
+                {secondaryText}
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* Row 2: context — amount, time, date, overdue */}
-        {hasContext && (
+        {hasMeta && (
           <div
             style={{
               display: 'flex',
-              gap: '8px',
+              gap: '7px',
               alignItems: 'center',
               flexWrap: 'wrap',
             }}
           >
-            {typeof entry.amount === 'number' && (
+            {dateLabel && (
               <span
                 style={{
+                  fontSize: '11px',
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: '#c9a882',
+                  color: entryIsOverdue ? '#c47070' : 'var(--text-secondary)',
                 }}
               >
-                {formatAmount(entry.amount)}
+                {dateLabel}
               </span>
             )}
 
             {entry.time && (
               <span
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                }}
-              >
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke={entry.type === 'health' ? '#7a9e7e' : 'var(--text-muted)'}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '12px',
-                    color: entry.type === 'health' ? '#7a9e7e' : 'var(--text-muted)',
-                  }}
-                >
-                  {entry.time}
-                </span>
-              </span>
-            )}
-
-            {entry.date && entry.date !== today && (
-              <span
-                style={{
-                  fontSize: '11px',
                   fontFamily: 'var(--font-mono)',
-                  color: 'var(--text-muted)',
+                  fontSize: '11px',
+                  color: entry.type === 'health' ? '#7a9e7e' : 'var(--text-muted)',
                 }}
               >
-                {formatDateShort(entry.date)}
+                {entry.time}
               </span>
             )}
 
-            {isOverdue && (
+            {typeof entry.amount === 'number' && (
               <span
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: '#c9a882',
                 }}
               >
-                <span
-                  style={{
-                    width: '5px',
-                    height: '5px',
-                    borderRadius: '50%',
-                    background: '#c47070',
-                    flexShrink: 0,
-                  }}
-                />
-                <span style={{ fontSize: '10px', color: '#c47070' }}>vencido</span>
+                {formatCLP(entry.amount)}
               </span>
             )}
+
+            {entryIsOverdue && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  color: '#c47070',
+                  border: '1px solid rgba(196,112,112,0.25)',
+                  background: 'rgba(196,112,112,0.08)',
+                  borderRadius: '999px',
+                  padding: '2px 7px',
+                  lineHeight: 1.4,
+                }}
+              >
+                vencido
+              </span>
+            )}
+
+            {extraTags.slice(0, 2).map((tag) => (
+              <span
+                key={tag}
+                style={{
+                  fontSize: '10px',
+                  padding: '1px 6px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,248,240,0.08)',
+                  background: 'rgba(255,248,240,0.04)',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.6,
+                }}
+              >
+                {tag}
+              </span>
+            ))}
           </div>
         )}
       </div>
