@@ -1,42 +1,49 @@
-project: MiniLib
-codename: Liev
-principle: backend-data-first
+project: Liev
+codename: liev
+principle: calm-daily-life-os
 
 mission: >
-  Transformar MiniLib en una libreta viva contextual para la vida cotidiana:
-  pendientes, gastos del hogar, salud, mascotas, pagos, citas y notas rápidas.
+  Liev is a calm, lightweight daily-life operating system.
+  It captures unstructured thoughts and turns them into structured,
+  actionable entries: payments, purchases, health, pets, appointments,
+  reminders, and notes.
+
+  The system is offline-first (Dexie/IndexedDB) with optional cloud
+  sync (Neon PostgreSQL via Drizzle). All writes go to local first;
+  sync runs in the background.
 
 rules:
-  - No mocks.
-  - No backend cloud todavía.
-  - No login todavía.
-  - No duplicar modelos.
-  - entries es la fuente única de verdad.
-  - UI consume core; core no depende de UI.
-  - IA visible mínima; inteligencia silenciosa.
-  - Cada cambio debe pasar npm run typecheck y npm run build.
+  - No mocks in production code.
+  - Backend-first: schema and sync before UI polish.
+  - entries is the single source of truth.
+  - UI consumes core; core does not depend on UI.
+  - Intelligence is silent; the user should feel understood, not inspected.
+  - Every meaningful implementation must update docs.
+  - RADAR first = deterministic parser. LLM second = enhancement layer.
+  - Calm Triage, advanced health, screenshots, recommendations, family sync, and AI assistant belong to ROADMAP.md, not MVP.
 
 agents:
-  parser_agent:
-    role: Detecta intención, fecha, hora, monto, categoría y tipo de entrada.
-    output: ParsedEntry
+  product_strategist:
+    role: Keeps the MVP focused. Rejects scope creep. Flags anything that belongs in ROADMAP.md.
+    file: .agents/prompts/product-strategist.md
 
-  normalizer_agent:
-    role: Limpia datos, normaliza montos, fechas, títulos y tags.
-    output: NormalizedEntry
+  frontend_polish:
+    role: Ensures calm, minimal, premium UI. Guards visual complexity and cognitive load.
+    file: .agents/prompts/frontend-polish.md
 
-  timeline_agent:
-    role: Agrupa entradas por hoy, próximos días y sin fecha.
-    output: TimelineGroup[]
+  backend_sync:
+    role: Guards schema integrity, sync correctness, and offline-first data flow.
+    file: .agents/prompts/backend-sync.md
 
-  query_agent:
-    role: Resuelve consultas simples sobre entries.
-    output: QueryResult
+  radar_parser:
+    role: Maintains the deterministic parser. Ensures RADAR first, LLM second.
+    file: .agents/prompts/radar-parser.md
 
-  safety_agent:
-    role: Detecta señales sensibles de salud, emergencia o riesgo financiero.
-    output: SafetyWarning[]
+  docs_keeper:
+    role: Ensures every meaningful change updates docs and checklists.
+    file: .agents/prompts/docs-keeper.md
 
-  insights_agent:
-    role: Detecta patrones cotidianos sin invadir al usuario.
-    output: MicroInsight[]
+checklists:
+  before_commit: .agents/checklists/before-commit.md
+  before_build: .agents/checklists/before-build.md
+  before_ui_change: .agents/checklists/before-ui-change.md
