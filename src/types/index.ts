@@ -67,6 +67,29 @@ export type EntryType =
 
 export type ShoppingStage = 'pending' | 'shopping' | 'completed';
 
+export type StoreType = 'supermercado' | 'feria' | 'farmacia' | 'otro';
+
+export interface ShoppingItem {
+  id: string;
+  label: string;
+  category: string;
+  checked: boolean;
+  quantity?: string;
+  estimatedPrice?: number;
+}
+
+export interface ShoppingMetadata {
+  listKind: 'shopping';
+  storeType: StoreType;
+  items: ShoppingItem[];
+  progress: {
+    total: number;
+    checked: number;
+  };
+}
+
+export type EntryMetadata = ShoppingMetadata | Record<string, unknown>;
+
 export interface ChecklistItem {
   id?: number;
   localId: string;            // UUID — stable across sync
@@ -93,6 +116,7 @@ export interface ParsedEntry {
   listItems?: string[];
   listGroups?: string[];
   detectedTags?: string[];
+  metadata?: EntryMetadata;
 }
 
 export interface TimelineEntry {
@@ -112,5 +136,6 @@ export interface TimelineEntry {
   listItems?: string[] | null;
   listGroups?: string[] | null;
   detectedTags?: string[] | null;
+  metadata?: EntryMetadata | null;
   syncedAt?: Date | null;
 }

@@ -29,3 +29,28 @@ Guidelines for developing the Next.js/React frontend.
 ## Component Structure
 - Favor Server Components for static layouts and initial data fetching.
 - Use Client Components for interactive elements and any component that hooks into Dexie.
+
+## Card Ordering
+Timeline groups remain `Hoy`, `Próximos días`, `Sin fecha`. Inside each group, entries are sorted by:
+1. **Pending first** — completed cards sink to the bottom.
+2. **Pinned first** — favorited cards float above normal ones.
+3. **Priority** — urgent > important > normal.
+4. **Date ascending** — earlier dates come first.
+5. **Time ascending** — when dates match.
+6. **Updated desc** — most recently touched as final tie-breaker.
+
+## Card Editing
+Every card supports inline editing:
+- Click the pencil icon to enter edit mode.
+- The raw text becomes an editable input.
+- **Enter** saves; **Escape** cancels; **Blur** saves.
+- On save, the text is re-parsed deterministically. `type`, `date`, `time`, `amount`, `tags`, and `metadata` are updated.
+- For shopping lists, existing `checked` states are preserved by matching item labels.
+- `syncedAt` is set to `null` so the next sync pushes the change.
+
+## Visual States
+- **Active cards**: full opacity, clean glass surface.
+- **Completed cards**: reduced opacity (`0.45`) to visually recede without disappearing.
+- **Pinned cards**: golden star indicator, sorted higher.
+- **Urgent cards**: red priority dot.
+- Keep visual complexity minimal; rely on opacity, subtle color, and spacing rather than borders or shadows.

@@ -1,4 +1,5 @@
 import type { TimelineEntry } from '@/types';
+import { formatLocalDateKey, addDays } from '@/lib/date';
 
 export interface TimelineGroup {
   label: string;
@@ -28,7 +29,86 @@ function formatDateLabel(dateStr: string): string {
   });
 }
 
-export function buildTimeline(entries: TimelineEntry[]): TimelineResult {
+type PriorityScore = 0 | 1 | 2; // normal < important < urgent
+
+function getTimelinePriority(entry: TimelineEntry): PriorityScore {
+  const text = `${entry.title} ${entry.text} ${entry.tags.join(' ')}`.toLowerCase();
+  const today = formatLocalDateKey(new Date());
+  const tomorrow = formatLocalDateKey(addDays(new Date(), 1));
+  const inTwoDays = formatLocalDateKey(addDays(new Date(), 2));
+
+  if (entry.done) return 0;
+
+  if (
+    (!!entry.date && entry.date < today) ||
+    /\b(urgente|urgencia|ya|inmediato|ahora)\b/.test(text)
+  ) {
+    return 2;
+  }
+
+  if (!entry.done && entry.date && (entry.date === today || entry.date === tomorrow)) {
+    return 2;
+  }
+
+  if (
+    /\b(importante|prioridad|pronto)\b/.test(text) ||
+    (!entry.done && entry.date && entry.date <= inTwoDays) ||
+    (entry.type === 'payment' && !entry.done && typeof entry.amount === 'number' && entry.amount >= 50000)
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function compareEntries(
+  a: TimelineEntry,
+  b: TimelineEntry,
+  pinnedIds: Set<string>,
+): number {
+  // 1. Done last
+  if (a.done !== b.done) return a.done ? 1 : -1;
+
+  // 2. Pinned first
+  const aPinned = pinnedIds.has(a.localId);
+  const bPinned = pinnedIds.has(b.localId);
+  if (aPinned !== bPinned) return aPinned ? -1 : 1;
+
+  // 3. Urgent > important > normal
+  const aPriority = getTimelinePriority(a);
+  const bPriority = getTimelinePriority(b);
+  if (aPriority !== bPriority) return bPriority - aPriority;
+
+  // 4. Date ascending (earlier first)
+  if (a.date && b.date) {
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) return dateCompare;
+  } else if (a.date) {
+    return -1;
+  } else if (b.date) {
+    return 1;
+  }
+
+  // 5. Time ascending
+  if (a.time && b.time) {
+    const timeCompare = a.time.localeCompare(b.time);
+    if (timeCompare !== 0) return timeCompare;
+  } else if (a.time) {
+    return -1;
+  } else if (b.time) {
+    return 1;
+  }
+
+  // 6. Fallback: updatedAt desc (most recently touched first)
+  const aTime = (a.updatedAt ?? a.createdAt).getTime();
+  const bTime = (b.updatedAt ?? b.createdAt).getTime();
+  return bTime - aTime;
+}
+
+export function buildTimeline(
+  entries: TimelineEntry[],
+  pinnedIds?: Set<string>,
+): TimelineResult {
   if (entries.length === 0) {
     return { groups: [], isEmpty: true };
   }
@@ -54,12 +134,11 @@ export function buildTimeline(entries: TimelineEntry[]): TimelineResult {
     }
   }
 
-  today.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
-  upcoming.sort((a, b) => {
-    const dateCompare = (a.date || '').localeCompare(b.date || '');
-    if (dateCompare !== 0) return dateCompare;
-    return (a.time || '').localeCompare(b.time || '');
-  });
+  const pins = pinnedIds ?? new Set<string>();
+
+  today.sort((a, b) => compareEntries(a, b, pins));
+  upcoming.sort((a, b) => compareEntries(a, b, pins));
+  undated.sort((a, b) => compareEntries(a, b, pins));
 
   const groups: TimelineGroup[] = [];
   if (today.length > 0) groups.push({ label: 'Hoy', entries: today, key: 'today' });

@@ -20,6 +20,7 @@ export async function upsertEntries(payload: CloudEntryInsert[]): Promise<void> 
         tags:      sql`EXCLUDED.tags`,
         done:      sql`EXCLUDED.done`,
         amount:    sql`EXCLUDED.amount`,
+        metadata:  sql`EXCLUDED.metadata`,
         updatedAt: sql`EXCLUDED.updated_at`,
         deletedAt: sql`EXCLUDED.deleted_at`,
       },

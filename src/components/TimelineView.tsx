@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { TimelineEntry, ChecklistItem, EntryType } from '@/types';
-import { toggleEntryDone, deleteEntry } from '@/db/entries';
+import type { TimelineEntry, ChecklistItem, EntryType, ShoppingMetadata } from '@/types';
+import { toggleEntryDone, deleteEntry, updateEntry, reparseAndUpdateEntry } from '@/db/entries';
 import { toggleChecklistItem } from '@/db/checklist';
 import { db } from '@/db';
 import { buildTimeline } from '@/core/agents/timeline-agent';
@@ -58,11 +58,51 @@ function withAlpha(color: string, alpha: number): string {
 }
 
 function getChecklistCategory(entry: TimelineEntry): string {
+  const meta = entry.metadata as ShoppingMetadata | undefined;
+  if (meta?.listKind === 'shopping') {
+    const map: Record<string, string> = {
+      supermercado: 'Supermercado',
+      feria: 'Feria',
+      farmacia: 'Farmacia',
+      otro: 'Otro',
+    };
+    return map[meta.storeType] ?? 'Supermercado';
+  }
   const tags = entry.detectedTags ?? [];
   if (tags.includes('aseo hogar') || tags.includes('casa')) return 'Casa';
   if (tags.includes('farmacia')) return 'Farmacia';
   if (tags.includes('mascotas')) return 'Mascotas';
   return 'Supermercado';
+}
+
+function isMetadataShopping(entry: TimelineEntry): boolean {
+  return (entry.metadata as ShoppingMetadata | undefined)?.listKind === 'shopping';
+}
+
+function getShoppingMetadata(entry: TimelineEntry): ShoppingMetadata | undefined {
+  return entry.metadata as ShoppingMetadata | undefined;
+}
+
+async function toggleMetadataItem(entry: TimelineEntry, itemId: string): Promise<void> {
+  if (!entry.id) return;
+  const meta = getShoppingMetadata(entry);
+  if (!meta) return;
+
+  const nextItems = meta.items.map((item) =>
+    item.id === itemId ? { ...item, checked: !item.checked } : item
+  );
+  const checked = nextItems.filter((i) => i.checked).length;
+
+  const nextMetadata: ShoppingMetadata = {
+    ...meta,
+    items: nextItems,
+    progress: {
+      total: nextItems.length,
+      checked,
+    },
+  };
+
+  await updateEntry(entry.id, { metadata: nextMetadata });
 }
 
 function getPaymentTitle(entry: TimelineEntry): string {
@@ -95,10 +135,7 @@ function getDetailOriginal(entry: TimelineEntry): string {
 
 // ─── Progress label for shopping lists ───────────────────────────────────────
 
-function ProgressLabel({ items }: { items: ChecklistItem[] }) {
-  const total   = items.length;
-  const checked = items.filter((i) => i.checked).length;
-
+function ProgressLabel({ total, checked }: { total: number; checked: number }) {
   if (total === 0) return null;
 
   const stage = getShoppingStage(checked, total);
@@ -180,6 +217,78 @@ function ChecklistRow({ item, onToggle }: ChecklistRowProps) {
   );
 }
 
+interface MetadataChecklistRowProps {
+  item: { id: string; label: string; category: string; checked: boolean; quantity?: string; estimatedPrice?: number };
+  entry: TimelineEntry;
+  onToggle: () => void;
+}
+
+function MetadataChecklistRow({ item, onToggle }: MetadataChecklistRowProps) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        background: 'transparent',
+        border: 'none',
+        padding: '4px 0',
+        cursor: 'pointer',
+        width: '100%',
+        textAlign: 'left',
+      }}
+    >
+      <span
+        style={{
+          width: '16px',
+          height: '16px',
+          borderRadius: '4px',
+          border: `1.5px solid ${item.checked ? '#7a9e7e' : 'rgba(255,248,240,0.18)'}`,
+          background: item.checked ? 'rgba(122,158,126,0.18)' : 'rgba(255,248,240,0.02)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          transition: 'all 0.15s ease',
+        }}
+        aria-hidden="true"
+      >
+        {item.checked && (
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#7a9e7e" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )}
+      </span>
+      <span
+        style={{
+          fontSize: '13px',
+          color: item.checked ? 'var(--text-muted)' : 'var(--text-secondary)',
+          textDecoration: item.checked ? 'line-through' : 'none',
+          lineHeight: 1.4,
+          transition: 'color 0.15s ease',
+        }}
+      >
+        {item.label}
+      </span>
+      {item.category !== 'otros' && (
+        <span
+          style={{
+            fontSize: '10px',
+            color: 'var(--text-muted)',
+            marginLeft: 'auto',
+            paddingLeft: '8px',
+            flexShrink: 0,
+          }}
+        >
+          {item.category}
+        </span>
+      )}
+    </button>
+  );
+}
+
 // ─── Detail line (non-shopping expanded view) ─────────────────────────────────
 
 function DetailLine({ label, value }: { label: string; value: string }) {
@@ -212,7 +321,13 @@ export default function TimelineView({ entries, onRefresh }: TimelineViewProps) 
     await toggleChecklistItem(itemId, checked);
   };
 
-  const timeline = buildTimeline(entries);
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setPinnedIds(new Set(entries.filter(isEntryPinned).map((e) => e.localId)));
+  }, [entries]);
+
+  const timeline = buildTimeline(entries, pinnedIds);
 
   if (timeline.isEmpty) {
     return (
@@ -254,19 +369,6 @@ interface TimelineGroupProps {
 }
 
 function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onAction }: TimelineGroupProps) {
-  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    setPinnedIds(new Set(entries.filter(isEntryPinned).map(getEntryStorageKey)));
-  }, [entries]);
-
-  const orderedEntries = [...entries].sort((a, b) => {
-    const aPinned = pinnedIds.has(getEntryStorageKey(a));
-    const bPinned = pinnedIds.has(getEntryStorageKey(b));
-    if (aPinned === bPinned) return 0;
-    return aPinned ? -1 : 1;
-  });
-
   return (
     <section style={{ marginBottom: '18px' }}>
       <h2
@@ -283,23 +385,13 @@ function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onActio
         {label}
       </h2>
       <div style={{ display: 'grid', gap: '8px' }}>
-        {orderedEntries.map((entry) => (
+        {entries.map((entry) => (
           <TimelineItem
             key={entry.localId}
             entry={entry}
             checklistItems={checklistByEntry.get(entry.localId) ?? []}
             onToggleItem={onToggleItem}
             onAction={onAction}
-            pinned={pinnedIds.has(getEntryStorageKey(entry))}
-            onPinChange={(nextPinned) => {
-              setPinnedIds((prev) => {
-                const next = new Set(prev);
-                const key  = getEntryStorageKey(entry);
-                if (nextPinned) next.add(key);
-                else next.delete(key);
-                return next;
-              });
-            }}
           />
         ))}
       </div>
@@ -314,12 +406,13 @@ interface TimelineItemProps {
   checklistItems: ChecklistItem[];
   onToggleItem: (itemId: number, checked: boolean) => Promise<void>;
   onAction: () => void;
-  pinned: boolean;
-  onPinChange: (nextPinned: boolean) => void;
 }
 
-function TimelineItem({ entry, checklistItems, onToggleItem, onAction, pinned, onPinChange }: TimelineItemProps) {
+function TimelineItem({ entry, checklistItems, onToggleItem, onAction }: TimelineItemProps) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(entry.text);
+  const [pinned, setPinned] = useState(isEntryPinned(entry));
 
   const handleToggleDone = async () => {
     if (entry.id === undefined) return;
@@ -333,6 +426,38 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, pinned, o
     onAction();
   };
 
+  const handleTogglePin = () => {
+    const next = toggleEntryPinned(entry);
+    setPinned(next);
+    onAction();
+  };
+
+  const handleStartEdit = () => {
+    setEditText(entry.text);
+    setEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editText.trim() || editText.trim() === entry.text) {
+      setEditing(false);
+      return;
+    }
+    if (entry.id !== undefined) {
+      await reparseAndUpdateEntry(entry.id, editText.trim());
+      onAction();
+    }
+    setEditing(false);
+  };
+
+  const handleKeyDownEdit = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      setEditing(false);
+    }
+  };
+
   const displayType   = getEntryDisplayType(entry);
   const color         = TYPE_COLORS[entry.type] ?? 'rgba(245,240,235,0.34)';
   const priority      = getEntryPriority(entry);
@@ -340,17 +465,25 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, pinned, o
   const amountLabel   = typeof entry.amount === 'number' ? formatCLP(entry.amount) : '';
   const detailOriginal = getDetailOriginal(entry);
 
-  const isShoppingList = entry.type === 'shopping_list';
+  const isShoppingList = entry.type === 'shopping_list' || isMetadataShopping(entry);
   const isPayment      = entry.type === 'payment';
   const isPetOrHealth  = entry.type === 'pet' || entry.type === 'health' || entry.type === 'appointment';
 
-  const title = isPayment ? getPaymentTitle(entry) : getEntryDisplayTitle(entry);
+  const metaShopping = getShoppingMetadata(entry);
+
+  const title = isPayment
+    ? getPaymentTitle(entry)
+    : metaShopping
+    ? 'Lista de compras'
+    : getEntryDisplayTitle(entry);
   const checklistCategory = isShoppingList ? getChecklistCategory(entry) : '';
   const statusText = isPayment ? getPaymentStatus(entry) : checkOverdue(entry) ? 'vencido' : '';
 
   // Collapsed checklist preview (first 3 unchecked items)
   const collapsedItems = isShoppingList
-    ? [...checklistItems].sort((a, b) => Number(a.checked) - Number(b.checked)).slice(0, 3)
+    ? metaShopping
+      ? [...metaShopping.items].sort((a, b) => Number(a.checked) - Number(b.checked)).slice(0, 3)
+      : [...checklistItems].sort((a, b) => Number(a.checked) - Number(b.checked)).slice(0, 3)
     : [];
 
   return (
@@ -361,7 +494,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, pinned, o
         display: 'flex',
         gap: '10px',
         alignItems: 'flex-start',
-        opacity: entry.done ? 0.58 : 1,
+        opacity: entry.done ? 0.45 : 1,
         transition: 'opacity 0.2s ease',
       }}
     >
@@ -394,152 +527,218 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, pinned, o
 
       {/* Card body: header button + expanded area sibling */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Clickable header — toggles expand/collapse */}
-        <button
-          type="button"
-          onClick={() => setExpanded((p) => !p)}
-          aria-expanded={expanded}
-          style={{
-            width: '100%',
-            background: 'transparent',
-            border: 'none',
-            padding: 0,
-            textAlign: 'left',
-            cursor: 'pointer',
-          }}
-        >
-          {/* Type pill + title + priority dot */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-            <span
+        {/* Header — editable or clickable */}
+        {editing ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              autoFocus
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onKeyDown={handleKeyDownEdit}
+              onBlur={handleSaveEdit}
               style={{
-                fontSize: '10px',
-                padding: '2px 7px',
-                borderRadius: '999px',
-                border: `1px solid ${withAlpha(color, 0.2)}`,
-                background: withAlpha(color, 0.08),
-                color,
-                flexShrink: 0,
-                lineHeight: 1.5,
-                marginTop: '1px',
-                textTransform: 'lowercase',
-              }}
-            >
-              {displayType}
-            </span>
-
-            <p
-              style={{
-                margin: 0,
                 flex: 1,
+                background: 'rgba(255,248,240,0.06)',
+                border: '1px solid rgba(255,248,240,0.12)',
+                borderRadius: '8px',
+                padding: '6px 10px',
                 fontSize: '13px',
-                fontWeight: 500,
-                color: entry.done ? 'var(--text-secondary)' : 'var(--text-primary)',
-                textDecoration: entry.done ? 'line-through' : 'none',
-                lineHeight: 1.42,
-                wordBreak: 'break-word',
-              }}
-            >
-              {title}
-            </p>
-
-            <span
-              aria-hidden="true"
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '999px',
-                background: PRIORITY_DOT[priority],
-                flexShrink: 0,
-                marginTop: '6px',
+                color: 'var(--text-primary)',
+                outline: 'none',
               }}
             />
           </div>
-
-          {/* Shopping list: category tag */}
-          {isShoppingList && checklistCategory && (
-            <p style={{ margin: '3px 0 0', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.35 }}>
-              {checklistCategory}
-            </p>
-          )}
-
-          {/* Collapsed checklist preview */}
-          {isShoppingList && !expanded && collapsedItems.length > 0 && (
-            <div style={{ display: 'grid', gap: '4px', marginTop: '8px', paddingLeft: '2px' }}>
-              {collapsedItems.map((item) => (
-                <div key={item.localId} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      width: '13px',
-                      height: '13px',
-                      borderRadius: '3px',
-                      border: `1px solid ${item.checked ? 'rgba(122,158,126,0.4)' : 'rgba(255,248,240,0.14)'}`,
-                      background: item.checked ? 'rgba(122,158,126,0.1)' : 'rgba(255,248,240,0.02)',
-                      flexShrink: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {item.checked && (
-                      <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#7a9e7e" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    )}
-                  </span>
-                  <span style={{
-                    fontSize: '12px',
-                    color: item.checked ? 'var(--text-muted)' : 'var(--text-secondary)',
-                    textDecoration: item.checked ? 'line-through' : 'none',
-                    lineHeight: 1.35,
-                  }}>
-                    {item.label}
-                  </span>
-                </div>
-              ))}
-              {checklistItems.length > 3 && (
-                <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>
-                  +{checklistItems.length - 3} más
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Meta row: date/amount/status/progress */}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' }}>
-            {whenLabel && (
-              <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: checkOverdue(entry) ? '#c47070' : 'var(--text-secondary)' }}>
-                {whenLabel}
-              </span>
-            )}
-            {amountLabel && (
-              <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#c9a882' }}>
-                {amountLabel}
-              </span>
-            )}
-            {isPayment && statusText && (
+        ) : (
+          <button
+            type="button"
+            onClick={() => setExpanded((p) => !p)}
+            aria-expanded={expanded}
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              textAlign: 'left',
+              cursor: 'pointer',
+            }}
+          >
+            {/* Type pill + title + priority dot */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
               <span
                 style={{
                   fontSize: '10px',
                   padding: '2px 7px',
                   borderRadius: '999px',
-                  color: statusText === 'vencido' ? '#c47070' : statusText === 'pendiente' ? '#b8944e' : '#7a9e7e',
-                  background: statusText === 'vencido' ? 'rgba(196,112,112,0.08)' : statusText === 'pendiente' ? 'rgba(184,148,78,0.08)' : 'rgba(122,158,126,0.08)',
-                  border: '1px solid rgba(255,248,240,0.08)',
-                  lineHeight: 1.4,
+                  border: `1px solid ${withAlpha(color, 0.2)}`,
+                  background: withAlpha(color, 0.08),
+                  color,
+                  flexShrink: 0,
+                  lineHeight: 1.5,
+                  marginTop: '1px',
+                  textTransform: 'lowercase',
                 }}
               >
-                {statusText}
+                {displayType}
               </span>
+
+              <p
+                style={{
+                  margin: 0,
+                  flex: 1,
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: entry.done ? 'var(--text-secondary)' : 'var(--text-primary)',
+                  textDecoration: entry.done ? 'line-through' : 'none',
+                  lineHeight: 1.42,
+                  wordBreak: 'break-word',
+                }}
+              >
+                {title}
+              </p>
+
+              <span
+                aria-hidden="true"
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '999px',
+                  background: PRIORITY_DOT[priority],
+                  flexShrink: 0,
+                  marginTop: '6px',
+                }}
+              />
+            </div>
+
+            {/* Shopping list: category tag */}
+            {isShoppingList && checklistCategory && (
+              <p style={{ margin: '3px 0 0', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.35 }}>
+                {checklistCategory}
+              </p>
             )}
-            {isShoppingList && <ProgressLabel items={checklistItems} />}
-            {isPetOrHealth && priority !== 'normal' && (
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                {priority === 'urgent' ? 'urgente' : 'importante'}
-              </span>
+
+            {/* Collapsed checklist preview */}
+            {isShoppingList && !expanded && collapsedItems.length > 0 && (
+              <div style={{ display: 'grid', gap: '4px', marginTop: '8px', paddingLeft: '2px' }}>
+                {metaShopping
+                  ? collapsedItems.map((item) => (
+                      <div key={(item as { id: string }).id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: '13px',
+                            height: '13px',
+                            borderRadius: '3px',
+                            border: `1px solid ${(item as { checked: boolean }).checked ? 'rgba(122,158,126,0.4)' : 'rgba(255,248,240,0.14)'}`,
+                            background: (item as { checked: boolean }).checked ? 'rgba(122,158,126,0.1)' : 'rgba(255,248,240,0.02)',
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {(item as { checked: boolean }).checked && (
+                            <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#7a9e7e" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          )}
+                        </span>
+                        <span style={{
+                          fontSize: '12px',
+                          color: (item as { checked: boolean }).checked ? 'var(--text-muted)' : 'var(--text-secondary)',
+                          textDecoration: (item as { checked: boolean }).checked ? 'line-through' : 'none',
+                          lineHeight: 1.35,
+                        }}>
+                          {(item as { label: string }).label}
+                        </span>
+                      </div>
+                    ))
+                  : (collapsedItems as ChecklistItem[]).map((item) => (
+                      <div key={item.localId} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: '13px',
+                            height: '13px',
+                            borderRadius: '3px',
+                            border: `1px solid ${item.checked ? 'rgba(122,158,126,0.4)' : 'rgba(255,248,240,0.14)'}`,
+                            background: item.checked ? 'rgba(122,158,126,0.1)' : 'rgba(255,248,240,0.02)',
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                          justifyContent: 'center',
+                          }}
+                        >
+                          {item.checked && (
+                            <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#7a9e7e" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          )}
+                        </span>
+                        <span style={{
+                          fontSize: '12px',
+                          color: item.checked ? 'var(--text-muted)' : 'var(--text-secondary)',
+                          textDecoration: item.checked ? 'line-through' : 'none',
+                          lineHeight: 1.35,
+                        }}>
+                          {item.label}
+                        </span>
+                      </div>
+                    ))}
+                {metaShopping
+                  ? metaShopping.items.length > 3 && (
+                      <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>
+                        +{metaShopping.items.length - 3} más
+                      </p>
+                    )
+                  : checklistItems.length > 3 && (
+                      <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>
+                        +{checklistItems.length - 3} más
+                      </p>
+                    )}
+              </div>
             )}
-          </div>
-        </button>
+
+            {/* Meta row: date/amount/status/progress */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' }}>
+              {whenLabel && (
+                <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: checkOverdue(entry) ? '#c47070' : 'var(--text-secondary)' }}>
+                  {whenLabel}
+                </span>
+              )}
+              {amountLabel && (
+                <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#c9a882' }}>
+                  {amountLabel}
+                </span>
+              )}
+              {isPayment && statusText && (
+                <span
+                  style={{
+                    fontSize: '10px',
+                    padding: '2px 7px',
+                    borderRadius: '999px',
+                    color: statusText === 'vencido' ? '#c47070' : statusText === 'pendiente' ? '#b8944e' : '#7a9e7e',
+                    background: statusText === 'vencido' ? 'rgba(196,112,112,0.08)' : statusText === 'pendiente' ? 'rgba(184,148,78,0.08)' : 'rgba(122,158,126,0.08)',
+                    border: '1px solid rgba(255,248,240,0.08)',
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {statusText}
+                </span>
+              )}
+              {isShoppingList && (
+                <ProgressLabel
+                  total={metaShopping ? metaShopping.items.length : checklistItems.length}
+                  checked={metaShopping ? metaShopping.items.filter((i) => i.checked).length : checklistItems.filter((i) => i.checked).length}
+                />
+              )}
+              {isPetOrHealth && priority !== 'normal' && (
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                  {priority === 'urgent' ? 'urgente' : 'importante'}
+                </span>
+              )}
+            </div>
+          </button>
+        )}
 
         {/* Expanded section — outside the button so interactive elements are valid */}
         <div
@@ -562,7 +761,20 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, pinned, o
               >
                 {isShoppingList ? (
                   <div style={{ display: 'grid', gap: '2px' }}>
-                    {checklistItems.length === 0 ? (
+                    {metaShopping ? (
+                      metaShopping.items.length === 0 ? (
+                        <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Sin ítems detectados</p>
+                      ) : (
+                        metaShopping.items.map((item) => (
+                          <MetadataChecklistRow
+                            key={item.id}
+                            item={item}
+                            entry={entry}
+                            onToggle={() => toggleMetadataItem(entry, item.id)}
+                          />
+                        ))
+                      )
+                    ) : checklistItems.length === 0 ? (
                       <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Sin ítems detectados</p>
                     ) : (
                       checklistItems.map((item) => (
@@ -610,11 +822,11 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, pinned, o
         </div>
       </div>
 
-      {/* Pin + delete */}
+      {/* Pin + edit + delete */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
         <button
           type="button"
-          onClick={() => onPinChange(toggleEntryPinned(entry))}
+          onClick={handleTogglePin}
           aria-label={pinned ? 'Quitar favorito' : 'Marcar favorito'}
           style={{
             width: '24px',
@@ -633,6 +845,31 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, pinned, o
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill={pinned ? '#c9a882' : 'none'} stroke="#c9a882" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 17.3 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleStartEdit}
+          aria-label="Editar"
+          style={{
+            width: '24px',
+            height: '24px',
+            borderRadius: '6px',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            opacity: 0.3,
+            transition: 'opacity 0.15s ease',
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
           </svg>
         </button>
 

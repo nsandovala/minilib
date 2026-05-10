@@ -1,5 +1,7 @@
 // Serialisable representation used on the wire between client and API routes.
 // No Dexie, no drizzle — safe to import on either side.
+import type { EntryMetadata } from '@/types';
+
 export interface EntryPayload {
   localId: string;
   text: string;
@@ -10,6 +12,7 @@ export interface EntryPayload {
   tags: string[];
   done: boolean;
   amount: number | null;
+  metadata: EntryMetadata | null;
   createdAt: string; // ISO-8601
   updatedAt: string; // ISO-8601
 }

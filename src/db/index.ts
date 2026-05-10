@@ -146,6 +146,24 @@ export class MiniLibDB extends Dexie {
           if (!('deletedAt' in item))  item['deletedAt'] = null;
         });
       });
+
+    // v7: adds metadata jsonb-like field to entries for structured shopping lists
+    this.version(7)
+      .stores({
+        notes: '++id, updatedAt',
+        drawings: '++id, createdAt',
+        medications: '++id, active, name',
+        todos: '++id, done, category, createdAt',
+        appointments: '++id, date, reminded',
+        scheduled_notifications: '++id, notifId, scheduledAt, fired',
+        entries: '++id, &localId, type, date, done, createdAt, syncedAt',
+        checklist_items: '++id, &localId, localEntryId, checked, updatedAt, syncedAt',
+      })
+      .upgrade((tx) => {
+        return tx.table('entries').toCollection().modify((entry: Record<string, unknown>) => {
+          if (!('metadata' in entry)) entry['metadata'] = null;
+        });
+      });
   }
 }
 

@@ -1,4 +1,4 @@
-import type { EntryType, ParsedEntry } from '@/types';
+import type { EntryType, ParsedEntry, ShoppingMetadata } from '@/types';
 import type { ExtractedTokens } from './parser-agent';
 
 const TYPE_PATTERNS: Record<EntryType, RegExp[]> = {
@@ -97,10 +97,32 @@ function buildTags(rawText: string, type: EntryType): string[] {
   return tags;
 }
 
+function buildShoppingMetadata(tokens: ExtractedTokens): ShoppingMetadata | undefined {
+  if (!tokens.isListLike || tokens.categorizedItems.length === 0) return undefined;
+
+  const items = tokens.categorizedItems.map((item) => ({
+    id: crypto.randomUUID(),
+    label: item.label,
+    category: item.category,
+    checked: false,
+  }));
+
+  return {
+    listKind: 'shopping',
+    storeType: tokens.storeType ?? 'otro',
+    items,
+    progress: {
+      total: items.length,
+      checked: 0,
+    },
+  };
+}
+
 export function normalizeEntry(tokens: ExtractedTokens): ParsedEntry {
   const type = detectType(tokens);
   const title = buildTitle(tokens, type);
   const tags = Array.from(new Set([...buildTags(tokens.rawText, type), ...tokens.detectedTags]));
+  const metadata = buildShoppingMetadata(tokens);
 
   return {
     text: tokens.rawText,
@@ -114,5 +136,6 @@ export function normalizeEntry(tokens: ExtractedTokens): ParsedEntry {
     listItems: tokens.listItems.length ? tokens.listItems : undefined,
     listGroups: tokens.listGroups.length ? tokens.listGroups : undefined,
     detectedTags: tokens.detectedTags.length ? tokens.detectedTags : undefined,
+    metadata,
   };
 }

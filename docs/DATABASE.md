@@ -13,11 +13,12 @@ Key Columns:
 - `syncedAt`: Timestamp of last successful sync (Dexie only — not stored in cloud).
 - `checklistItems`: Legacy seed array in the entry; canonical item state lives in `checklist_items` table.
 - `listItems`, `listGroups`, `detectedTags`: Deterministic metadata from the parser.
+- `metadata`: JSONB field for structured entry metadata. Used for shopping lists (`listKind: 'shopping'`) with `storeType`, `items` (array with `id`, `label`, `category`, `checked`, `quantity`, `estimatedPrice`), and `progress` (`total`, `checked`).
 
 ## Checklist Items Table
-Separate table for structured per-item state within a `shopping_list` entry.
+Separate table for structured per-item state within a `shopping_list` entry. Maintained for backwards compatibility; new shopping lists use `metadata` as the canonical source.
 
-Local (Dexie v6, table: `checklist_items`, indexes: `++id, &localId, localEntryId, checked, updatedAt, syncedAt`):
+Local (Dexie v6/v7, table: `checklist_items`, indexes: `++id, &localId, localEntryId, checked, updatedAt, syncedAt`):
 - `id`: Auto-increment local PK.
 - `localId`: UUID — stable sync key.
 - `localEntryId`: Parent entry's `localId`.
@@ -35,6 +36,21 @@ Cloud (Neon table: `checklist_items`, applied via `npm run db:push`):
 - `label`, `checked`, `category`, `sort_order`, `created_at`, `updated_at`.
 - `deleted_at`: Soft-delete — returned on pull so deletions propagate to all devices.
 
+## Shopping List Metadata (New)
+For MVP, shopping lists store their structured state inside `entries.metadata` as `ShoppingMetadata`:
+- `listKind`: `"shopping"`
+- `storeType`: `"supermercado" | "feria" | "farmacia" | "otro"`
+- `items`: Array of objects:
+  - `id`: UUID
+  - `label`: string
+  - `category`: deterministic category (`lácteos`, `huevos/despensa`, `frutas/verduras`, `panadería`, `aseo`, `bebestibles`, `otros`)
+  - `checked`: boolean
+  - `quantity?`: string
+  - `estimatedPrice?`: number
+- `progress`: `{ total: number; checked: number }`
+
+This metadata is synced via the `entries` table (push/pull) and merged last-write-wins by `updatedAt`.
+
 ## Soft-Delete Behavior
 When a parent entry is deleted, its checklist items are soft-deleted locally (`deletedAt = now, syncedAt = null`). The next push sends these to Neon. The next pull on any other device receives the items with `deletedAt` set and soft-deletes them locally.
 
@@ -44,6 +60,7 @@ When a parent entry is deleted, its checklist items are soft-deleted locally (`d
 - v4: Adds `checklistItems`, `listItems`, `listGroups`, `detectedTags` fields to entries.
 - v5: Adds `checklist_items` table; seeds `ChecklistItem` records from existing `entry.checklistItems` arrays.
 - v6: Adds `updatedAt` index + backfills `sortOrder: 0` and `deletedAt: null` on all existing items.
+- v7: Adds `metadata` field to entries (JSON object, defaults to `null`).
 
 ## Migrations
 Schema is applied to Neon via `npm run db:push` (Drizzle Kit push). Run this after any cloud schema change.

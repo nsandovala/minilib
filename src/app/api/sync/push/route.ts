@@ -15,6 +15,7 @@ function entryToInsert(userId: string, p: EntryPayload): CloudEntryInsert {
     tags:      JSON.stringify(p.tags),
     done:      p.done,
     amount:    p.amount ?? null,
+    metadata:  p.metadata ?? null,
     createdAt: new Date(p.createdAt),
     updatedAt: new Date(p.updatedAt),
     deletedAt: null,

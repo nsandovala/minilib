@@ -15,6 +15,7 @@ function entryToPayload(entry: TimelineEntry): EntryPayload {
     tags:      encodeEntryTagsForSync(entry),
     done:      entry.done,
     amount:    entry.amount ?? null,
+    metadata:  entry.metadata ?? null,
     createdAt: entry.createdAt.toISOString(),
     updatedAt: (entry.updatedAt ?? entry.createdAt).toISOString(),
   };

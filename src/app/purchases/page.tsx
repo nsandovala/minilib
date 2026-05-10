@@ -5,7 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db';
 import { useEntries } from '@/hooks/useEntries';
 import TimelineView from '@/components/TimelineView';
-import type { TimelineEntry, ChecklistItem } from '@/types';
+import type { TimelineEntry, ChecklistItem, ShoppingMetadata } from '@/types';
 
 function getShoppingLists(entries: TimelineEntry[]): TimelineEntry[] {
   return entries.filter((e) => e.type === 'shopping_list');
@@ -33,9 +33,15 @@ function ShoppingSummary({ lists, itemsByEntry }: ShoppingSummaryProps) {
   let checkedItems = 0;
 
   for (const list of activeLists) {
-    const items = (itemsByEntry.get(list.localId) ?? []).filter((i) => !i.deletedAt);
-    totalItems   += items.length;
-    checkedItems += items.filter((i) => i.checked).length;
+    const meta = list.metadata as ShoppingMetadata | undefined;
+    if (meta?.listKind === 'shopping') {
+      totalItems += meta.items.length;
+      checkedItems += meta.items.filter((i) => i.checked).length;
+    } else {
+      const items = (itemsByEntry.get(list.localId) ?? []).filter((i) => !i.deletedAt);
+      totalItems   += items.length;
+      checkedItems += items.filter((i) => i.checked).length;
+    }
   }
 
   const pct = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;

@@ -10,20 +10,112 @@ export interface ExtractedTokens {
   listGroups: string[];
   detectedTags: string[];
   isListLike: boolean;
+  storeType: 'supermercado' | 'feria' | 'farmacia' | 'otro' | null;
+  categorizedItems: { label: string; category: string }[];
 }
 
 const LIST_CATEGORY_RULES = [
   { pattern: /\bfrutas?\b/i, tag: 'frutas' },
   { pattern: /\bverduras?\b/i, tag: 'verduras' },
-  { pattern: /\b(lacteos|lácteos|leche|yogurt|queso)\b/i, tag: 'lácteos' },
+  { pattern: /\b(lacteos|lácteos|leche|yogurt|yogur|queso)\b/i, tag: 'lácteos' },
   { pattern: /\b(carnes?|pollo|vacuno|cerdo|pescado)\b/i, tag: 'carnes' },
-  { pattern: /\b(panaderia|panadería|pan|bolleria|bollería)\b/i, tag: 'panadería' },
-  { pattern: /\b(aseo|limpieza|detergente|cloro|desinfectante|papel higienico|papel higiénico|articulos de aseo|artículos de aseo)\b/i, tag: 'aseo hogar' },
+  { pattern: /\b(panaderia|panadería|pan|bolleria|bollería|hallulla|marraqueta)\b/i, tag: 'panadería' },
+  { pattern: /\b(aseo|limpieza|detergente|cloro|desinfectante|papel higienico|papel higiénico|articulos de aseo|artículos de aseo|confort|papel|lavaloza)\b/i, tag: 'aseo hogar' },
   { pattern: /\b(farmacia|remedio|medicina|pastilla|vitamina)\b/i, tag: 'farmacia' },
   { pattern: /\b(mascota|perro|gato|arena|comida para mascota|alimento para mascota)\b/i, tag: 'mascotas' },
-  { pattern: /\b(despensa|arroz|fideos|legumbres|aceite|harina|azucar|azúcar)\b/i, tag: 'despensa' },
+  { pattern: /\b(despensa|arroz|fideos|legumbres|aceite|harina|azucar|azúcar|huevos)\b/i, tag: 'despensa' },
   { pattern: /\b(casa|hogar)\b/i, tag: 'casa' },
+  { pattern: /\b(bebida|bebidas|jugo|agua)\b/i, tag: 'bebestibles' },
 ];
+
+const SHOPPING_CATEGORY_MAP: Record<string, string> = {
+  // lácteos
+  leche: 'lácteos',
+  yogurt: 'lácteos',
+  yogur: 'lácteos',
+  queso: 'lácteos',
+  mantequilla: 'lácteos',
+  // huevos/despensa
+  huevos: 'huevos/despensa',
+  arroz: 'huevos/despensa',
+  fideos: 'huevos/despensa',
+  azúcar: 'huevos/despensa',
+  azucar: 'huevos/despensa',
+  harina: 'huevos/despensa',
+  aceite: 'huevos/despensa',
+  // frutas/verduras
+  tomate: 'frutas/verduras',
+  palta: 'frutas/verduras',
+  paltas: 'frutas/verduras',
+  lechuga: 'frutas/verduras',
+  cebolla: 'frutas/verduras',
+  papas: 'frutas/verduras',
+  frutas: 'frutas/verduras',
+  verduras: 'frutas/verduras',
+  // panadería
+  pan: 'panadería',
+  hallulla: 'panadería',
+  marraqueta: 'panadería',
+  // aseo
+  confort: 'aseo',
+  papel: 'aseo',
+  cloro: 'aseo',
+  detergente: 'aseo',
+  lavaloza: 'aseo',
+  // bebestibles
+  bebida: 'bebestibles',
+  bebidas: 'bebestibles',
+  jugo: 'bebestibles',
+  agua: 'bebestibles',
+};
+
+const STORE_TYPE_PATTERNS: { pattern: RegExp; type: 'supermercado' | 'feria' | 'farmacia' }[] = [
+  { pattern: /\b(supermercado|super|en el super|en el supermercado)\b/i, type: 'supermercado' },
+  { pattern: /\bferia\b/i, type: 'feria' },
+  { pattern: /\bfarmacia\b/i, type: 'farmacia' },
+];
+
+function detectStoreType(text: string): 'supermercado' | 'feria' | 'farmacia' | 'otro' {
+  for (const rule of STORE_TYPE_PATTERNS) {
+    if (rule.pattern.test(text)) return rule.type;
+  }
+  return 'otro';
+}
+
+function classifyItemCategory(label: string): string {
+  const normalized = label.toLowerCase().trim();
+  // Remove trailing 's' for simple plural matching
+  const singular = normalized.replace(/s$/, '');
+  return SHOPPING_CATEGORY_MAP[normalized] ?? SHOPPING_CATEGORY_MAP[singular] ?? 'otros';
+}
+
+function normalizeListItem(item: string): string {
+  return item
+    .replace(/^[,;.\-\s]+/, '')
+    .replace(/[;.\s]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const SHOPPING_INTRO_PATTERNS = [
+  /\bcomprar\s+en\s+(?:el\s+)?(?:super(?:mercado)?|mercado|super)\b/gi,
+  /\blista\s+(?:de\s+)?(?:compras|supermercado|super)\b/gi,
+  /\bnecesito\s+(?:comprar|traer)\b/gi,
+  /\btraer\s+(?:de\s+)?(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
+  /\bir\s+a\s+(?:comprar|el\s+super|el\s+mercado)\b/gi,
+  /\bcomprar\b/gi,
+  /\bsupermercado\b/gi,
+  /\ben\s+el\s+super\b/gi,
+  /\blista\s+de\b/gi,
+];
+
+function cleanShoppingIntro(text: string): string {
+  let cleaned = text;
+  for (const pattern of SHOPPING_INTRO_PATTERNS) {
+    cleaned = cleaned.replace(pattern, ' ');
+  }
+  return cleaned.replace(/\s+/g, ' ').trim();
+}
 
 const DAY_MAP: Record<string, number> = {
   lunes: 1,
@@ -214,24 +306,18 @@ function extractKeywords(text: string): string[] {
     .filter((w) => w.length > 2 && !stopWords.has(w));
 }
 
-function normalizeListItem(item: string): string {
-  return item
-    .replace(/^[,;.\-\s]+/, '')
-    .replace(/[;.\s]+$/, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 function extractListMetadata(text: string): {
   checklistItems: string[];
   listItems: string[];
   listGroups: string[];
   detectedTags: string[];
   isListLike: boolean;
+  storeType: 'supermercado' | 'feria' | 'farmacia' | 'otro' | null;
+  categorizedItems: { label: string; category: string }[];
 } {
-  const normalized = text.trim();
+  const normalized = cleanShoppingIntro(text.trim());
   const commaParts = normalized
-    .split(/[;,]/)
+    .split(/[,;]/)
     .map(normalizeListItem)
     .filter(Boolean);
 
@@ -253,12 +339,21 @@ function extractListMetadata(text: string): {
   const listGroups = detectedTags.filter((tag) => tag !== 'casa');
   const isListLike = hasCommaList || detectedTags.length >= 2;
 
+  const storeType = isListLike ? detectStoreType(normalized) : null;
+
+  const categorizedItems = listItems.map((label) => ({
+    label,
+    category: classifyItemCategory(label),
+  }));
+
   return {
     checklistItems: isListLike ? (listItems.length ? listItems : [normalized]) : [],
     listItems: isListLike ? (listItems.length ? listItems : [normalized]) : [],
     listGroups: isListLike ? listGroups : [],
     detectedTags: isListLike ? detectedTags : [],
     isListLike,
+    storeType,
+    categorizedItems,
   };
 }
 
@@ -281,5 +376,61 @@ export function parseTokens(rawText: string): ExtractedTokens {
     listGroups: listMeta.listGroups,
     detectedTags: listMeta.detectedTags,
     isListLike: listMeta.isListLike,
+    storeType: listMeta.storeType,
+    categorizedItems: listMeta.categorizedItems,
   };
+}
+
+export interface ParsedIntent {
+  intent:
+    | 'shopping_list'
+    | 'purchase'
+    | 'payment'
+    | 'income'
+    | 'pet'
+    | 'note';
+  storeType?: 'supermercado' | 'feria' | 'farmacia' | 'otro';
+  items?: { label: string; category: string }[];
+  title?: string;
+  date?: string | null;
+  time?: string | null;
+  amount?: number | null;
+}
+
+export function parseEntryIntent(input: string): ParsedIntent {
+  const tokens = parseTokens(input);
+  const lower = input.toLowerCase();
+
+  // Payment / Income detection
+  if (/\b(pagar|pago|factura|cuenta|internet|luz|agua|gas|arriendo|hipoteca|tarjeta|prestamo|préstamo)\b/i.test(lower)) {
+    return { intent: 'payment', date: tokens.date, time: tokens.time, amount: tokens.amount };
+  }
+  if (/\b(ingreso|sueldo|me pagaron|pagaron|venta|transferencia recibida|entró|entro|depósito|deposito)\b/i.test(lower)) {
+    return { intent: 'income', date: tokens.date, time: tokens.time, amount: tokens.amount };
+  }
+
+  // Pet detection
+  if (/\b(mascota|perro|gato|veterinario|vet|vacuna|comida para|alimento para|correa|arena)\b/i.test(lower)) {
+    return { intent: 'pet', date: tokens.date, time: tokens.time };
+  }
+
+  // Shopping list detection
+  if (tokens.isListLike && tokens.categorizedItems.length > 0) {
+    const storeType = tokens.storeType ?? 'otro';
+    return {
+      intent: 'shopping_list',
+      storeType,
+      items: tokens.categorizedItems,
+      title: 'Lista de compras',
+      date: tokens.date,
+      time: tokens.time,
+    };
+  }
+
+  // Simple purchase detection
+  if (/\b(comprar|compra|supermercado|feria|mercado)\b/i.test(lower)) {
+    return { intent: 'purchase', date: tokens.date, time: tokens.time, amount: tokens.amount };
+  }
+
+  return { intent: 'note', date: tokens.date, time: tokens.time };
 }

@@ -4,7 +4,9 @@ import {
   boolean,
   integer,
   timestamp,
+  jsonb,
 } from 'drizzle-orm/pg-core';
+import type { EntryMetadata } from '@/types';
 
 export const entries = pgTable('entries', {
   id:         text('id').primaryKey(),              // localId from the client
@@ -17,6 +19,7 @@ export const entries = pgTable('entries', {
   tags:       text('tags').notNull().default('[]'), // JSON string
   done:       boolean('done').notNull().default(false),
   amount:     integer('amount'),
+  metadata:   jsonb('metadata').$type<EntryMetadata | null>(),
   createdAt:  timestamp('created_at',  { withTimezone: true }).notNull(),
   updatedAt:  timestamp('updated_at',  { withTimezone: true }).notNull(),
   deletedAt:  timestamp('deleted_at',  { withTimezone: true }),

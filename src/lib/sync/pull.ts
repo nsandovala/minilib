@@ -21,6 +21,7 @@ function payloadToEntry(p: EntryPayload): Omit<TimelineEntry, 'id'> {
     listItems: decoded.listItems,
     listGroups: decoded.listGroups,
     detectedTags: decoded.detectedTags,
+    metadata:  p.metadata ?? null,
     createdAt: new Date(p.createdAt),
     updatedAt: new Date(p.updatedAt),
     syncedAt:  new Date(),
@@ -88,6 +89,7 @@ export async function pull(): Promise<void> {
           listItems: decoded.listItems,
           listGroups: decoded.listGroups,
           detectedTags: decoded.detectedTags,
+          metadata:  p.metadata ?? null,
           updatedAt: remoteUpdated,
           syncedAt:  now,
         });

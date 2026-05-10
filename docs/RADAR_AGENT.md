@@ -43,13 +43,50 @@ RADAR-compatible parsing recognizes grocery and household lists from comma-separ
 Examples:
 - `leche, yogurt, cereal, pan`
 - `frutas, verduras, lácteos, artículos de aseo para la casa`
+- `comprar en el super, leche, huevos, mantequilla, pan, bebidas, paltas, tomate`
 
 When `isListLike` is true, the normalizer emits `type: 'shopping_list'` and the entry creation flow seeds structured `ChecklistItem` records in Dexie. Each item is independently toggleable and syncs to the cloud `checklist_items` table.
 
+New behavior (metadata-first):
+- `metadata.listKind = 'shopping'`
+- `metadata.storeType` = `supermercado | feria | farmacia | otro`
+- `metadata.items[]` = `{ id, label, category, checked, quantity?, estimatedPrice? }`
+- `metadata.progress` = `{ total, checked }`
+
 Deterministic outputs:
-- `checklistItems[]`: seed labels for Dexie records
+- `checklistItems[]`: seed labels for Dexie records (backwards compat)
 - `listGroups[]`: detected grocery/household groups
 - `detectedTags[]`: semantic tags (frutas, lácteos, aseo hogar…)
+- `metadata`: canonical structured state for shopping lists
+
+## Item Categories (Deterministic)
+The parser classifies each shopping item into a deterministic category:
+- **lácteos**: leche, yogurt, yogur, queso, mantequilla
+- **huevos/despensa**: huevos, arroz, fideos, azúcar, harina, aceite
+- **frutas/verduras**: tomate, palta, paltas, lechuga, cebolla, papas, frutas, verduras
+- **panadería**: pan, hallulla, marraqueta
+- **aseo**: confort, papel, cloro, detergente, lavaloza
+- **bebestibles**: bebida, bebidas, jugo, agua
+- **otros**: fallback
+
+## Intro Cleaning
+Before splitting comma-separated input into items, the parser strips introductory phrases so the checklist contains only real products:
+- `comprar en el super`
+- `lista de compras`
+- `necesito comprar`
+- `traer de el super`
+- `ir a comprar`
+- `supermercado`
+- `en el super`
+
+After cleaning, the remaining tokens are split by commas and classified into categories.
+
+## Store Detection
+Introductory phrases are stripped and the destination is detected:
+- `supermercado`, `super`, `en el super` → `supermercado`
+- `feria` → `feria`
+- `farmacia` → `farmacia`
+- default → `otro`
 
 ## Shopping Stage
 Derived dynamically from item state — not stored:

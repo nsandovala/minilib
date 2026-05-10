@@ -22,6 +22,7 @@ function cloudEntryToPayload(row: CloudEntry): EntryPayload {
     tags,
     done:      row.done,
     amount:    row.amount ?? null,
+    metadata:  row.metadata ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
