@@ -62,11 +62,11 @@ Deterministic outputs:
 ## Item Categories (Deterministic)
 The parser classifies each shopping item into a deterministic category:
 - **lácteos**: leche, yogurt, yogur, queso, mantequilla
-- **huevos/despensa**: huevos, arroz, fideos, azúcar, harina, aceite
-- **frutas/verduras**: tomate, palta, paltas, lechuga, cebolla, papas, frutas, verduras
-- **panadería**: pan, hallulla, marraqueta
+- **huevos/despensa**: huevos, arroz, fideos, azúcar, harina, aceite, pan integral
+- **frutas/verduras**: tomate, palta, paltas, lechuga, cebolla, papas, frutas, verduras, plátano, limones
+- **panadería**: pan, hallulla, marraqueta, pan batido, colizas
 - **aseo**: confort, papel, cloro, detergente, lavaloza
-- **bebestibles**: bebida, bebidas, jugo, agua
+- **bebestibles**: bebida, bebidas, jugo, agua  
 - **otros**: fallback
 
 ## Intro Cleaning
