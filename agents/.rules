@@ -4,3 +4,39 @@
 - No agent modifies files outside declared scope
 - Fail loudly
 - All inputs/outputs declared in agent.yaml
+
+# Build & Type Check Rules
+
+- After every code-generating step, run `npm run typecheck`
+- If typecheck fails, fix it immediately
+- Only commit when typecheck passes
+- If building takes more than 30 seconds, refuse the change and ask for simplification
+
+#   Scope Rules
+
+- No agent modifies files outside its declared scope in `agent.yaml`
+- Do not touch `package.json`, `package-lock.json`, or `next.config.ts` unless explicitly allowed
+- Core logic lives in `src/core/` — never modify it without a spec
+- UI lives in `src/app/`, `src/components/`, `src/lib/` — only modify files listed in `scope`
+- Keep `.agents/specs/` as the source of truth for planned features
+
+# Safety Rules
+
+- Never write database migrations without explicit user approval
+- No destructive operations (delete, truncate, update with no WHERE) unless explicitly requested
+- No changes to `.env*`, `docker-compose.yml`, or cloud config files without explicit user approval
+- If a change might break compatibility with existing data, refuse and ask for review
+
+# Output Rules
+
+- Always summarize changes in a list or bullet points
+- When showing code, use triple backticks and specify the language
+- Always run `npm run typecheck` after code changes
+- When a change exceeds 30 seconds of build time, refuse and suggest simplification
+
+# Commit Rules
+
+- Only commit when typecheck passes
+- Commit messages must be in Spanish
+- Use short, descriptive commit messages
+- Do not commit without user approval

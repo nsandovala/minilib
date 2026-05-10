@@ -5,7 +5,25 @@ export interface ExtractedTokens {
   amount: number | null;
   keywords: string[];
   cleanedText: string;
+  checklistItems: string[];
+  listItems: string[];
+  listGroups: string[];
+  detectedTags: string[];
+  isListLike: boolean;
 }
+
+const LIST_CATEGORY_RULES = [
+  { pattern: /\bfrutas?\b/i, tag: 'frutas' },
+  { pattern: /\bverduras?\b/i, tag: 'verduras' },
+  { pattern: /\b(lacteos|lácteos|leche|yogurt|queso)\b/i, tag: 'lácteos' },
+  { pattern: /\b(carnes?|pollo|vacuno|cerdo|pescado)\b/i, tag: 'carnes' },
+  { pattern: /\b(panaderia|panadería|pan|bolleria|bollería)\b/i, tag: 'panadería' },
+  { pattern: /\b(aseo|limpieza|detergente|cloro|desinfectante|papel higienico|papel higiénico|articulos de aseo|artículos de aseo)\b/i, tag: 'aseo hogar' },
+  { pattern: /\b(farmacia|remedio|medicina|pastilla|vitamina)\b/i, tag: 'farmacia' },
+  { pattern: /\b(mascota|perro|gato|arena|comida para mascota|alimento para mascota)\b/i, tag: 'mascotas' },
+  { pattern: /\b(despensa|arroz|fideos|legumbres|aceite|harina|azucar|azúcar)\b/i, tag: 'despensa' },
+  { pattern: /\b(casa|hogar)\b/i, tag: 'casa' },
+];
 
 const DAY_MAP: Record<string, number> = {
   lunes: 1,
@@ -196,11 +214,60 @@ function extractKeywords(text: string): string[] {
     .filter((w) => w.length > 2 && !stopWords.has(w));
 }
 
+function normalizeListItem(item: string): string {
+  return item
+    .replace(/^[,;.\-\s]+/, '')
+    .replace(/[;.\s]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractListMetadata(text: string): {
+  checklistItems: string[];
+  listItems: string[];
+  listGroups: string[];
+  detectedTags: string[];
+  isListLike: boolean;
+} {
+  const normalized = text.trim();
+  const commaParts = normalized
+    .split(/[;,]/)
+    .map(normalizeListItem)
+    .filter(Boolean);
+
+  const hasCommaList = commaParts.length >= 2;
+  const listItems = hasCommaList ? commaParts : [];
+
+  const matchedTags = new Set<string>();
+  const haystacks = (listItems.length ? listItems : [normalized]).map((item) => item.toLowerCase());
+
+  for (const haystack of haystacks) {
+    for (const rule of LIST_CATEGORY_RULES) {
+      if (rule.pattern.test(haystack)) {
+        matchedTags.add(rule.tag);
+      }
+    }
+  }
+
+  const detectedTags = Array.from(matchedTags);
+  const listGroups = detectedTags.filter((tag) => tag !== 'casa');
+  const isListLike = hasCommaList || detectedTags.length >= 2;
+
+  return {
+    checklistItems: isListLike ? (listItems.length ? listItems : [normalized]) : [],
+    listItems: isListLike ? (listItems.length ? listItems : [normalized]) : [],
+    listGroups: isListLike ? listGroups : [],
+    detectedTags: isListLike ? detectedTags : [],
+    isListLike,
+  };
+}
+
 export function parseTokens(rawText: string): ExtractedTokens {
   const { time, cleaned: afterTime } = extractTime(rawText);
   const { date, cleaned: afterDate } = extractDate(afterTime);
   const { amount, cleaned: afterAmount } = extractAmount(afterDate);
   const keywords = extractKeywords(afterAmount);
+  const listMeta = extractListMetadata(afterAmount);
 
   return {
     rawText,
@@ -209,5 +276,10 @@ export function parseTokens(rawText: string): ExtractedTokens {
     amount,
     keywords,
     cleanedText: afterAmount,
+    checklistItems: listMeta.checklistItems,
+    listItems: listMeta.listItems,
+    listGroups: listMeta.listGroups,
+    detectedTags: listMeta.detectedTags,
+    isListLike: listMeta.isListLike,
   };
 }

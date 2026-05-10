@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { ClerkProvider } from '@clerk/nextjs';
 import './globals.css';
 import BottomNav from '@/components/ui/BottomNav';
 import NotificationBanner from '@/components/ui/NotificationBanner';
@@ -29,18 +30,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
-      <body>
-        <div aria-hidden="true">
-          <div className="bg-grain" />
-        </div>
-        <main style={{ position: 'relative', zIndex: 1, paddingBottom: '72px' }}>
-          {children}
-        </main>
-        <NotificationBanner />
-        <BottomNav />
-        <AppInit />
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="es">
+        <body>
+          <div aria-hidden="true">
+            <div className="bg-grain" />
+          </div>
+          <main style={{ position: 'relative', zIndex: 1, paddingBottom: '72px' }}>
+            {children}
+          </main>
+          <NotificationBanner />
+          <BottomNav />
+          <AppInit />
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

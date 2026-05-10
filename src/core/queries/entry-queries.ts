@@ -102,6 +102,7 @@ export function queryEntries(
 
 export function getPurchaseEntries(entries: TimelineEntry[]): TimelineEntry[] {
   return entries.filter((entry) => {
+    if (entry.type === 'shopping_list') return true;
     if (entry.type === 'payment' && matchesAnyTerm(entry, PURCHASE_TERMS)) return true;
     if (entry.type === 'task' && matchesAnyTerm(entry, PURCHASE_TERMS)) return true;
     return false;
@@ -154,6 +155,7 @@ export function countByType(entries: TimelineEntry[]): Record<EntryType, number>
     appointment: 0,
     payment: 0,
     pet: 0,
+    shopping_list: 0,
   };
 
   for (const entry of entries) {

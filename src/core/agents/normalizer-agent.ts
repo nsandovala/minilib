@@ -22,10 +22,17 @@ const TYPE_PATTERNS: Record<EntryType, RegExp[]> = {
     /\b(comprar|llevar|sacar|hacer|limpiar|lavar|cocinar|preparar|arreglar|revisar|cambiar|ir\s+a|pasar\s+por|buscar|entregar|devolver|agendar)\b/i,
   ],
   note: [],
+  shopping_list: [],
 };
 
 export function detectType(tokens: ExtractedTokens): EntryType {
   const lower = tokens.rawText.toLowerCase();
+
+  if (tokens.isListLike) {
+    if (tokens.detectedTags.includes('mascotas')) return 'pet';
+    // Any structured grocery/household list becomes a shopping_list
+    return 'shopping_list';
+  }
 
   const priorityOrder: EntryType[] = [
     'payment',
@@ -47,6 +54,15 @@ export function detectType(tokens: ExtractedTokens): EntryType {
 }
 
 function buildTitle(tokens: ExtractedTokens, type: EntryType): string {
+  if (tokens.isListLike) {
+    if (tokens.detectedTags.includes('mascotas')) return 'Lista para mascotas';
+    if (tokens.detectedTags.includes('farmacia')) return 'Lista de farmacia';
+    if (tokens.detectedTags.includes('aseo hogar') || tokens.detectedTags.includes('casa')) {
+      return 'Lista para la casa';
+    }
+    return 'Lista de compras';
+  }
+
   // Use cleanedText: date/time/amount are already stripped, so the verb stays intact.
   // e.g. "comprar cilantro mañana" → cleanedText = "comprar cilantro" → "Comprar cilantro"
   const base = tokens.cleanedText.trim() || tokens.rawText.trim();
@@ -54,6 +70,9 @@ function buildTitle(tokens: ExtractedTokens, type: EntryType): string {
 
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+  if (type === 'shopping_list') {
+    return cap(base);
+  }
   if (type === 'payment' && !/\bpagar?\b/i.test(base)) {
     return `Pagar ${base}`;
   }
@@ -81,7 +100,7 @@ function buildTags(rawText: string, type: EntryType): string[] {
 export function normalizeEntry(tokens: ExtractedTokens): ParsedEntry {
   const type = detectType(tokens);
   const title = buildTitle(tokens, type);
-  const tags = buildTags(tokens.rawText, type);
+  const tags = Array.from(new Set([...buildTags(tokens.rawText, type), ...tokens.detectedTags]));
 
   return {
     text: tokens.rawText,
@@ -91,5 +110,9 @@ export function normalizeEntry(tokens: ExtractedTokens): ParsedEntry {
     time: tokens.time ?? undefined,
     tags,
     amount: tokens.amount ?? undefined,
+    checklistItems: tokens.checklistItems.length ? tokens.checklistItems : undefined,
+    listItems: tokens.listItems.length ? tokens.listItems : undefined,
+    listGroups: tokens.listGroups.length ? tokens.listGroups : undefined,
+    detectedTags: tokens.detectedTags.length ? tokens.detectedTags : undefined,
   };
 }

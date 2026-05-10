@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useAuth } from '@clerk/nextjs';
 import { usePathname } from 'next/navigation';
 
 const navItems = [
@@ -74,6 +75,11 @@ const navItems = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const { isLoaded, isSignedIn } = useAuth();
+
+  if (!isLoaded || !isSignedIn) {
+    return null;
+  }
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-[100]" style={{ padding: '0 12px 16px' }}>

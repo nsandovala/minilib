@@ -62,7 +62,24 @@ export type EntryType =
   | 'health'
   | 'appointment'
   | 'payment'
-  | 'pet';
+  | 'pet'
+  | 'shopping_list';
+
+export type ShoppingStage = 'pending' | 'shopping' | 'completed';
+
+export interface ChecklistItem {
+  id?: number;
+  localId: string;            // UUID — stable across sync
+  localEntryId: string;       // parent entry's localId
+  label: string;
+  checked: boolean;
+  category: string | null;
+  sortOrder: number;          // display order within the list
+  createdAt: Date;
+  updatedAt: Date;
+  syncedAt?: Date | null;
+  deletedAt?: Date | null;    // soft-delete — propagates across sync
+}
 
 export interface ParsedEntry {
   text: string;
@@ -72,10 +89,15 @@ export interface ParsedEntry {
   time?: string;
   tags: string[];
   amount?: number;
+  checklistItems?: string[];  // seed labels for ChecklistItem records
+  listItems?: string[];
+  listGroups?: string[];
+  detectedTags?: string[];
 }
 
 export interface TimelineEntry {
   id?: number;
+  localId: string;       // UUID — stable identifier across sync
   text: string;
   type: EntryType;
   title: string;
@@ -86,4 +108,9 @@ export interface TimelineEntry {
   createdAt: Date;
   updatedAt?: Date | null;
   amount?: number | null;
+  checklistItems?: string[] | null;  // seed labels (canonical state is in checklist_items table)
+  listItems?: string[] | null;
+  listGroups?: string[] | null;
+  detectedTags?: string[] | null;
+  syncedAt?: Date | null;
 }

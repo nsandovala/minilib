@@ -10,23 +10,25 @@ interface UniversalInputProps {
 }
 
 const TYPE_COLORS: Record<EntryType, string> = {
-  note: 'var(--text-secondary)',
-  task: 'var(--accent-primary)',
-  reminder: 'var(--accent-warning)',
-  health: 'var(--accent-success)',
-  appointment: 'var(--accent-violet)',
-  payment: 'var(--accent-human)',
-  pet: 'var(--accent-human)',
+  note:          'var(--text-secondary)',
+  task:          'var(--accent-primary)',
+  reminder:      'var(--accent-warning)',
+  health:        'var(--accent-success)',
+  appointment:   'var(--accent-violet)',
+  payment:       'var(--accent-human)',
+  pet:           'var(--accent-human)',
+  shopping_list: 'var(--accent-primary)',
 };
 
 const TYPE_LABELS: Record<EntryType, string> = {
-  note: 'nota',
-  task: 'tarea',
-  reminder: 'recordatorio',
-  health: 'salud',
-  appointment: 'cita',
-  payment: 'pago',
-  pet: 'mascota',
+  note:          'nota',
+  task:          'tarea',
+  reminder:      'recordatorio',
+  health:        'salud',
+  appointment:   'cita',
+  payment:       'pago',
+  pet:           'mascota',
+  shopping_list: 'lista de compras',
 };
 
 export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
