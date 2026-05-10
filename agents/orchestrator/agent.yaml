@@ -1,5 +1,13 @@
 name: orchestrator
 version: "1.0"
+integrations:
+  amon_agents:
+    status: planned
+    purpose: reuse planner, qa, security, docs agents
+
+  sentinel_board:
+    status: planned
+    purpose: visualize tasks, bugs, roadmap and release state
 commands:
   - scaffold
   - validate-db
