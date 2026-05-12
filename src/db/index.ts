@@ -143,7 +143,7 @@ export class MiniLibDB extends Dexie {
       .upgrade((tx) => {
         return tx.table('checklist_items').toCollection().modify((item: Record<string, unknown>) => {
           if (!('sortOrder' in item)) item['sortOrder'] = 0;
-          if (!('deletedAt' in item))  item['deletedAt'] = null;
+          if (!('deletedAt' in item)) item['deletedAt'] = null;
         });
       });
 
@@ -167,4 +167,38 @@ export class MiniLibDB extends Dexie {
   }
 }
 
-export const db = new MiniLibDB();
+
+function isIndexedDBAvailable(): boolean {
+  try {
+    return (
+      typeof window !== 'undefined' &&
+      typeof indexedDB !== 'undefined' &&
+      indexedDB !== null
+    );
+  } catch {
+    return false;
+  }
+}
+
+function createStubDB(): MiniLibDB {
+  const noopArr = async () => [];
+  const noopNull = async () => null;
+  const noop = async () => { };
+  const whereStub = () => ({
+    equals: () => ({ first: noopNull, toArray: noopArr, modify: noop, delete: noop }),
+  });
+  const tableStub = {
+    toArray: noopArr, add: async () => 0, update: noop, delete: noop,
+    put: noop, where: whereStub, filter: () => ({ toArray: noopArr }),
+    orderBy: () => ({ reverse: () => ({ toArray: noopArr }), toArray: noopArr }),
+    get: noopNull, count: async () => 0, clear: noop, bulkAdd: noop, bulkPut: noop,
+  };
+  return {
+    entries: tableStub, checklist_items: tableStub,
+    scheduled_notifications: tableStub, drawings: tableStub,
+    medications: tableStub, todos: tableStub, appointments: tableStub,
+    transaction: async (_m: string, _t: unknown[], fn: () => Promise<void>) => fn(),
+  } as unknown as MiniLibDB;
+}
+
+export const db = isIndexedDBAvailable() ? new MiniLibDB() : createStubDB();

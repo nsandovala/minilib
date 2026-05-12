@@ -221,7 +221,7 @@ export default function SpaceBackground(): JSX.Element | null {
       window.removeEventListener('resize', resize);
       window.removeEventListener('scroll', onScroll);
     };
-  }, []);
+  }, [mounted]);
 
   if (!mounted) return null;
 
