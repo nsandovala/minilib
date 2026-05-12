@@ -46,3 +46,58 @@ checklists:
   before_commit: .agents/checklists/before-commit.md
   before_build: .agents/checklists/before-build.md
   before_ui_change: .agents/checklists/before-ui-change.md
+
+cognitive_agents:
+  - name: calm_parser
+    role: parse_input
+    mode: deterministic
+    status: planned
+    purpose: >
+      Transformar texto natural desordenado en una estructura operativa:
+      tipo, título, fecha, monto, prioridad, lista, ítems y contexto.
+
+  - name: radar
+    role: classify_input
+    mode: deterministic
+    status: planned
+    purpose: >
+      Clasificar la entrada del usuario y detectar si corresponde a nota,
+      tarea, pago, compra, salud, mascota, casa, calendario, lista o proyecto.
+
+  - name: list_builder
+    role: structure_lists
+    mode: deterministic
+    status: planned
+    purpose: >
+      Detectar listas rápidas de compras o pendientes y convertirlas en
+      checklist persistente con ítems marcables.
+
+  - name: finance_parser
+    role: extract_financial_movement
+    mode: deterministic
+    status: planned
+    purpose: >
+      Detectar ingresos, egresos, pagos, compras, montos y estados financieros
+      simples para alimentar el módulo de Finanzas.
+
+  - name: calendar_parser
+    role: extract_dates_and_reminders
+    mode: deterministic
+    status: planned
+    purpose: >
+      Extraer fechas, horas, vencimientos y recordatorios desde lenguaje natural.
+
+  - name: docs_guardian
+    role: enforce_documentation
+    mode: deterministic
+    status: active
+    purpose: >
+      Verificar que cada cambio importante actualice documentación, roadmap
+      o MVP_STATUS.
+
+  - name: orchestrator
+    role: route_commands_and_queries
+    mode: deterministic
+    status: active
+    purpose: >
+      Router inteligente de comandos, consultas y flujos de trabajo.

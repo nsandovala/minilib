@@ -96,3 +96,11 @@ Derived dynamically from item state — not stored:
 
 ## Future Layers
 Inventory tracking, recurring basket intelligence, and estimated pricing remain future layers built on top of the structured checklist foundation.
+
+## Planned Cognitive Agents
+- calm_parser
+- radar
+- list_builder
+- finance_parser
+- calendar_parser
+- docs_guardian

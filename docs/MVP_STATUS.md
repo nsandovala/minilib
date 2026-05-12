@@ -37,6 +37,15 @@
 - conflict resolution
 - reminders
 
+## Planned Cognitive Agents
+- calm_parser
+- radar
+- list_builder
+- finance_parser
+- calendar_parser
+- docs_guardian
+- orchestrator
+
 ## FUTURE
 - HEO integrations
 - family sync
