@@ -32,6 +32,12 @@
 - **Clean shopping parser**: intro phrases stripped before item extraction
 - **Completed cards visually dimmed** (0.45 opacity)
 - **list_builder cognitive agent**: deterministic shopping-list builder with category classification (`src/core/agents/list-builder-agent.ts`)
+- **Real shopping item persistence**: `toggleShoppingItem()` in `src/db/entries.ts` atomically updates `metadata.items[].checked`, recalculates progress, sets dirty flag, and reflects instantly via `useLiveQuery`
+- **CLP parser**: `normalizeCLP()` en `src/lib/money.ts` soporta puntos como separador de miles (`2.900` → 2900), `$`, `k`, `lucas`
+- **Item-level prices**: `list-builder-agent` extrae precios de ítems (`pan 2.900` → amount: 2900) y cantidades/unidades
+- **Shopping totals**: `progress.totalEstimated` y `progress.totalChecked` calculados automáticamente
+- **Finance bridge**: al marcar lista como completada se crea entrada `payment` con monto total, deduplicada por tag `from_shopping:{localId}`
+- **Purchases UI**: precios por ítem, total estimado/comprado en resumen y tarjetas
 
 ## IN PROGRESS
 - radar agent enhancements

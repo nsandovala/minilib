@@ -29,6 +29,14 @@ App init / focus
 - Items are tied to a parent entry via `localEntryId`.
 - Checked/unchecked state persists across devices.
 
+### Shopping List Metadata (`entries.metadata`)
+- Modern shopping lists store item state inside `entries.metadata` as `ShoppingMetadata`.
+- `metadata.items[].checked`, `metadata.progress.checked`, `metadata.progress.total`, `metadata.progress.totalEstimated`, and `metadata.progress.totalChecked` are part of the entry payload.
+- Toggling an item updates the entry in Dexie, setting `syncedAt = null`.
+- The next push sends the entire entry (including metadata) to Neon; the next pull merges it last-write-wins.
+- No separate sync table is required for metadata-first shopping lists.
+- Item prices (`amount`) and quantity/unit travel inside the same JSON payload.
+
 ## Dirty Flag
 - `syncedAt = null`: record created locally, never pushed.
 - `syncedAt < updatedAt`: record updated since last push.

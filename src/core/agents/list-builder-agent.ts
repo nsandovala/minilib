@@ -1,13 +1,11 @@
-import type { ShoppingItem } from '@/types';
+import type { ShoppingItem, ShoppingProgress } from '@/types';
+import { normalizeCLP } from '@/lib/money';
 
 export interface ShoppingListBuildResult {
   listKind: 'shopping';
   storeType: 'supermercado' | 'feria' | 'farmacia' | 'otro';
   items: ShoppingItem[];
-  progress: {
-    total: number;
-    checked: number;
-  };
+  progress: ShoppingProgress;
   detectedTags: string[];
 }
 
@@ -60,9 +58,59 @@ function detectStoreType(text: string): ShoppingListBuildResult['storeType'] {
 function normalizeListItem(item: string): string {
   return item
     .replace(/^[,.\-\s]+/, '')
-    .replace(/[,.\s]+$/, '')
+    .replace(/[,\.\s]+$/, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/* ──────────────────────────────────────────
+   Item details: price, quantity, unit
+   ────────────────────────────────────────── */
+
+const UNIT_ALIASES: Record<string, string> = {
+  un: 'un', ud: 'un', uds: 'un', unidad: 'un', unidades: 'un',
+  kg: 'kg', kilo: 'kg', kilos: 'kg',
+  g: 'g', gr: 'g', gramo: 'g', gramos: 'g',
+  lt: 'lt', l: 'lt', litro: 'lt', litros: 'lt',
+  ml: 'ml', mililitro: 'ml', mililitros: 'ml',
+  caja: 'caja', cajas: 'caja',
+  paquete: 'paquete', paquetes: 'paquete',
+  bolsa: 'bolsa', bolsas: 'bolsa',
+  lata: 'lata', latas: 'lata',
+  botella: 'botella', botellas: 'botella',
+  pack: 'pack', packs: 'pack', sixpack: 'pack',
+};
+
+function parseItemDetails(rawLabel: string): Omit<ShoppingItem, 'id' | 'category' | 'checked'> {
+  let remaining = rawLabel.trim();
+  let amount: number | undefined;
+  let quantity: string | undefined;
+  let unit: string | undefined;
+
+  // 1. Extract trailing price: "pan 2.900", "coca cola $1.650", "agua 1500"
+  const pricePattern = /^(.*?)\s+(\$?\d{1,3}(?:[.,]\d{3})*(?:\s*(?:k|lucas?))?)\s*$/i;
+  const priceMatch = remaining.match(pricePattern);
+  if (priceMatch) {
+    const candidate = priceMatch[1].trim();
+    const rawPrice = priceMatch[2].trim();
+    const parsed = normalizeCLP(rawPrice);
+    if (parsed !== null && parsed >= 100) {
+      amount = parsed;
+      remaining = candidate;
+    }
+  }
+
+  // 2. Extract quantity + unit from remaining: "leche 2 lt", "arroz 1 kg"
+  const qtyPattern = /^(.*?)\s+(\d+(?:[.,]\d+)?)\s*(un|uds?|kg|g|gr|lt|l|ml|cajas?|paquetes?|bolsas?|latas?|botellas?|packs?|sixpack)\s*$/i;
+  const qtyMatch = remaining.match(qtyPattern);
+  if (qtyMatch) {
+    quantity = qtyMatch[2].trim().replace(',', '.');
+    const rawUnit = qtyMatch[3].trim().toLowerCase();
+    unit = UNIT_ALIASES[rawUnit] ?? rawUnit;
+    remaining = qtyMatch[1].trim();
+  }
+
+  return { label: remaining, amount, quantity, unit };
 }
 
 /* ──────────────────────────────────────────
@@ -245,7 +293,6 @@ function classifyItemCategory(label: string): string {
   if (ITEM_CATEGORY_MAP[normalized]) return ITEM_CATEGORY_MAP[normalized];
   if (ITEM_CATEGORY_MAP[singular]) return ITEM_CATEGORY_MAP[singular];
 
-  // Partial match for multi-word labels (e.g. "papel higiénico")
   for (const [key, category] of Object.entries(ITEM_CATEGORY_MAP)) {
     if (normalized.includes(key)) return category;
   }
@@ -285,6 +332,18 @@ function detectTags(items: string[]): string[] {
 }
 
 /* ──────────────────────────────────────────
+   Helpers
+   ────────────────────────────────────────── */
+
+function buildProgress(items: ShoppingItem[]): ShoppingProgress {
+  const total = items.length;
+  const checked = items.filter((i) => i.checked).length;
+  const totalEstimated = items.reduce((sum, i) => sum + (i.amount ?? 0), 0);
+  const totalChecked = items.filter((i) => i.checked).reduce((sum, i) => sum + (i.amount ?? 0), 0);
+  return { total, checked, totalEstimated, totalChecked };
+}
+
+/* ──────────────────────────────────────────
    Public API
    ────────────────────────────────────────── */
 
@@ -305,7 +364,6 @@ export function buildShoppingList(input: string): ShoppingListBuildResult | null
   const storeFromRaw = detectStoreType(raw);
   const hasStoreKeyword = storeFromRaw !== 'otro';
 
-  // If the first token is just a store name, treat it as context and remove it from items.
   const storeNameSet = new Set(['supermercado', 'super', 'feria', 'farmacia']);
   const firstPartLower = parts[0]?.toLowerCase() ?? '';
   const isFirstPartStore = storeNameSet.has(firstPartLower);
@@ -315,30 +373,32 @@ export function buildShoppingList(input: string): ShoppingListBuildResult | null
     itemLabels = parts.slice(1);
   }
 
-  // Heuristic: need ≥2 items, OR a store keyword + ≥1 item, OR ≥1 item with a known category.
   const hasKnownCategory = itemLabels.some((l) => classifyItemCategory(l) !== 'otros');
   if (itemLabels.length < 1) return null;
   if (itemLabels.length < 2 && !hasStoreKeyword && !hasKnownCategory) return null;
 
   const storeType = storeFromRaw !== 'otro' ? storeFromRaw : detectStoreType(cleaned);
 
-  const items: ShoppingItem[] = itemLabels.map((label) => ({
-    id: crypto.randomUUID(),
-    label,
-    category: classifyItemCategory(label),
-    checked: false,
-  }));
+  const items: ShoppingItem[] = itemLabels.map((rawLabel) => {
+    const details = parseItemDetails(rawLabel);
+    return {
+      id: crypto.randomUUID(),
+      label: details.label,
+      category: classifyItemCategory(details.label),
+      checked: false,
+      amount: details.amount,
+      quantity: details.quantity,
+      unit: details.unit,
+    };
+  });
 
-  const detectedTags = detectTags(itemLabels);
+  const detectedTags = detectTags(items.map((i) => i.label));
 
   return {
     listKind: 'shopping',
     storeType,
     items,
-    progress: {
-      total: items.length,
-      checked: 0,
-    },
+    progress: buildProgress(items),
     detectedTags,
   };
 }

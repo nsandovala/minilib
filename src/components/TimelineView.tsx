@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TimelineEntry, ChecklistItem, EntryType, ShoppingMetadata } from '@/types';
-import { toggleEntryDone, deleteEntry, updateEntry, reparseAndUpdateEntry } from '@/db/entries';
+import { toggleEntryDone, deleteEntry, updateEntry, reparseAndUpdateEntry, toggleShoppingItem } from '@/db/entries';
 import { toggleChecklistItem } from '@/db/checklist';
 import { db } from '@/db';
 import { buildTimeline } from '@/core/agents/timeline-agent';
@@ -83,28 +83,6 @@ function getShoppingMetadata(entry: TimelineEntry): ShoppingMetadata | undefined
   return entry.metadata as ShoppingMetadata | undefined;
 }
 
-async function toggleMetadataItem(entry: TimelineEntry, itemId: string): Promise<void> {
-  if (!entry.id) return;
-  const meta = getShoppingMetadata(entry);
-  if (!meta) return;
-
-  const nextItems = meta.items.map((item) =>
-    item.id === itemId ? { ...item, checked: !item.checked } : item
-  );
-  const checked = nextItems.filter((i) => i.checked).length;
-
-  const nextMetadata: ShoppingMetadata = {
-    ...meta,
-    items: nextItems,
-    progress: {
-      total: nextItems.length,
-      checked,
-    },
-  };
-
-  await updateEntry(entry.id, { metadata: nextMetadata });
-}
-
 function getPaymentTitle(entry: TimelineEntry): string {
   const title = getEntryDisplayTitle(entry);
   return title
@@ -135,11 +113,23 @@ function getDetailOriginal(entry: TimelineEntry): string {
 
 // ─── Progress label for shopping lists ───────────────────────────────────────
 
-function ProgressLabel({ total, checked }: { total: number; checked: number }) {
+function ProgressLabel({
+  total,
+  checked,
+  totalEstimated,
+  totalChecked,
+}: {
+  total: number;
+  checked: number;
+  totalEstimated?: number;
+  totalChecked?: number;
+}) {
   if (total === 0) return null;
 
   const stage = getShoppingStage(checked, total);
-  const color  = stage === 'completed' ? '#7a9e7e' : stage === 'shopping' ? '#c9a882' : 'var(--text-muted)';
+  const color = stage === 'completed' ? '#7a9e7e' : stage === 'shopping' ? '#c9a882' : 'var(--text-muted)';
+
+  const hasMoney = typeof totalEstimated === 'number' && totalEstimated > 0;
 
   return (
     <span
@@ -148,11 +138,21 @@ function ProgressLabel({ total, checked }: { total: number; checked: number }) {
         fontFamily: 'var(--font-mono)',
         color,
         fontWeight: stage === 'completed' ? 600 : 400,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
       }}
     >
       {stage === 'completed'
         ? `✓ Completado`
         : `${checked}/${total} listo${checked !== 1 ? 's' : ''}`}
+      {hasMoney && (
+        <span style={{ color: '#c9a882', fontWeight: 500 }}>
+          {typeof totalChecked === 'number' && totalChecked > 0
+            ? `${formatCLP(totalChecked)} / ${formatCLP(totalEstimated)}`
+            : formatCLP(totalEstimated)}
+        </span>
+      )}
     </span>
   );
 }
@@ -218,8 +218,7 @@ function ChecklistRow({ item, onToggle }: ChecklistRowProps) {
 }
 
 interface MetadataChecklistRowProps {
-  item: { id: string; label: string; category: string; checked: boolean; quantity?: string; estimatedPrice?: number };
-  entry: TimelineEntry;
+  item: { id: string; label: string; category: string; checked: boolean; quantity?: string; unit?: string; amount?: number };
   onToggle: () => void;
 }
 
@@ -268,11 +267,31 @@ function MetadataChecklistRow({ item, onToggle }: MetadataChecklistRowProps) {
           textDecoration: item.checked ? 'line-through' : 'none',
           lineHeight: 1.4,
           transition: 'color 0.15s ease',
+          flex: 1,
+          minWidth: 0,
         }}
       >
         {item.label}
+        {item.quantity && item.unit && (
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>
+            {item.quantity} {item.unit}
+          </span>
+        )}
       </span>
-      {item.category !== 'otros' && (
+      {typeof item.amount === 'number' && (
+        <span
+          style={{
+            fontSize: '11px',
+            fontFamily: 'var(--font-mono)',
+            color: item.checked ? 'var(--text-muted)' : '#c9a882',
+            paddingLeft: '8px',
+            flexShrink: 0,
+          }}
+        >
+          {formatCLP(item.amount)}
+        </span>
+      )}
+      {item.category !== 'otros' && !item.amount && (
         <span
           style={{
             fontSize: '10px',
@@ -729,6 +748,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction }: Timelin
                 <ProgressLabel
                   total={metaShopping ? metaShopping.items.length : checklistItems.length}
                   checked={metaShopping ? metaShopping.items.filter((i) => i.checked).length : checklistItems.filter((i) => i.checked).length}
+                  totalEstimated={metaShopping?.progress.totalEstimated}
+                  totalChecked={metaShopping?.progress.totalChecked}
                 />
               )}
               {isPetOrHealth && priority !== 'normal' && (
@@ -765,14 +786,36 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction }: Timelin
                       metaShopping.items.length === 0 ? (
                         <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Sin ítems detectados</p>
                       ) : (
-                        metaShopping.items.map((item) => (
-                          <MetadataChecklistRow
-                            key={item.id}
-                            item={item}
-                            entry={entry}
-                            onToggle={() => toggleMetadataItem(entry, item.id)}
-                          />
-                        ))
+                        <>
+                          {metaShopping.items.map((item) => (
+                            <MetadataChecklistRow
+                              key={item.id}
+                              item={item}
+                              onToggle={() => entry.id !== undefined && toggleShoppingItem(entry.id, item.id)}
+                            />
+                          ))}
+                          {metaShopping.progress.totalEstimated > 0 && (
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginTop: '6px',
+                                paddingTop: '6px',
+                                borderTop: '1px solid rgba(255,248,240,0.06)',
+                              }}
+                            >
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                {metaShopping.progress.totalChecked > 0 ? 'Comprado' : 'Total estimado'}
+                              </span>
+                              <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: '#c9a882', fontWeight: 600 }}>
+                                {metaShopping.progress.totalChecked > 0
+                                  ? `${formatCLP(metaShopping.progress.totalChecked)} / ${formatCLP(metaShopping.progress.totalEstimated)}`
+                                  : formatCLP(metaShopping.progress.totalEstimated)}
+                              </span>
+                            </div>
+                          )}
+                        </>
                       )
                     ) : checklistItems.length === 0 ? (
                       <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Sin ítems detectados</p>

@@ -5,6 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db';
 import { useEntries } from '@/hooks/useEntries';
 import TimelineView from '@/components/TimelineView';
+import { formatCLP } from '@/lib/entries';
 import type { TimelineEntry, ChecklistItem, ShoppingMetadata } from '@/types';
 
 function getShoppingLists(entries: TimelineEntry[]): TimelineEntry[] {
@@ -31,12 +32,16 @@ function ShoppingSummary({ lists, itemsByEntry }: ShoppingSummaryProps) {
 
   let totalItems   = 0;
   let checkedItems = 0;
+  let totalEstimated = 0;
+  let totalChecked = 0;
 
   for (const list of activeLists) {
     const meta = list.metadata as ShoppingMetadata | undefined;
     if (meta?.listKind === 'shopping') {
       totalItems += meta.items.length;
       checkedItems += meta.items.filter((i) => i.checked).length;
+      totalEstimated += meta.progress.totalEstimated;
+      totalChecked += meta.progress.totalChecked;
     } else {
       const items = (itemsByEntry.get(list.localId) ?? []).filter((i) => !i.deletedAt);
       totalItems   += items.length;
@@ -45,6 +50,7 @@ function ShoppingSummary({ lists, itemsByEntry }: ShoppingSummaryProps) {
   }
 
   const pct = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
+  const hasMoney = totalEstimated > 0;
 
   return (
     <div
@@ -53,7 +59,7 @@ function ShoppingSummary({ lists, itemsByEntry }: ShoppingSummaryProps) {
         margin: '0 20px 14px',
         padding: '14px 16px',
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gridTemplateColumns: hasMoney ? 'repeat(4, minmax(0, 1fr))' : 'repeat(3, minmax(0, 1fr))',
         gap: '12px',
       }}
     >
@@ -68,6 +74,13 @@ function ShoppingSummary({ lists, itemsByEntry }: ShoppingSummaryProps) {
         value={`${pct}%`}
         highlight={pct === 100}
       />
+      {hasMoney && (
+        <SummaryCell
+          label={totalChecked > 0 ? 'Comprado' : 'Estimado'}
+          value={totalChecked > 0 ? formatCLP(totalChecked) : formatCLP(totalEstimated)}
+          highlight={totalChecked > 0 && totalChecked >= totalEstimated}
+        />
+      )}
 
       {totalItems > 0 && (
         <div style={{ gridColumn: '1 / -1', marginTop: '4px' }}>

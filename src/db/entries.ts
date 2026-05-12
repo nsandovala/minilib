@@ -58,8 +58,46 @@ export async function getEntries(): Promise<TimelineEntry[]> {
   return db.entries.orderBy('createdAt').reverse().toArray();
 }
 
+/* ─── Finance bridge: shopping list → payment ─────────────────────────────── */
+
+async function ensureShoppingListPayment(entry: TimelineEntry): Promise<void> {
+  const meta = entry.metadata as ShoppingMetadata | undefined;
+  if (!meta || meta.listKind !== 'shopping') return;
+
+  const total = meta.progress.totalChecked > 0
+    ? meta.progress.totalChecked
+    : meta.progress.totalEstimated;
+
+  if (!total || total <= 0) return;
+
+  // Dedup: look for existing payment tagged with this shopping list
+  const allEntries = await db.entries.toArray();
+  const existing = allEntries.find(
+    (e) =>
+      e.type === 'payment' &&
+      e.tags.some((t) => t === `from_shopping:${entry.localId}`),
+  );
+
+  if (existing) return;
+
+  await createEntry({
+    text: `Compra ${meta.storeType}`,
+    type: 'payment',
+    title: `Compra ${meta.storeType}`,
+    tags: ['payment', 'gasto cotidiano', `from_shopping:${entry.localId}`],
+    amount: total,
+  });
+}
+
 export async function toggleEntryDone(id: number, done: boolean): Promise<void> {
+  const entry = await db.entries.get(id);
+  if (!entry) return;
+
   await db.entries.update(id, { done, updatedAt: new Date(), syncedAt: null });
+
+  if (done && entry.type === 'shopping_list') {
+    await ensureShoppingListPayment(entry);
+  }
 }
 
 export async function updateEntry(
@@ -79,6 +117,40 @@ export async function deleteEntry(id: number): Promise<void> {
   await db.entries.delete(id);
 }
 
+/* ─── Shopping item toggle with total recalculation ───────────────────────── */
+
+function recalcShoppingProgress(meta: ShoppingMetadata): ShoppingMetadata['progress'] {
+  const total = meta.items.length;
+  const checked = meta.items.filter((i) => i.checked).length;
+  const totalEstimated = meta.items.reduce((sum, i) => sum + (i.amount ?? 0), 0);
+  const totalChecked = meta.items.filter((i) => i.checked).reduce((sum, i) => sum + (i.amount ?? 0), 0);
+  return { total, checked, totalEstimated, totalChecked };
+}
+
+export async function toggleShoppingItem(entryId: number, itemId: string): Promise<void> {
+  const entry = await db.entries.get(entryId);
+  if (!entry) return;
+
+  const meta = entry.metadata as ShoppingMetadata | undefined;
+  if (!meta || meta.listKind !== 'shopping') return;
+
+  const nextItems = meta.items.map((item) =>
+    item.id === itemId ? { ...item, checked: !item.checked } : item,
+  );
+
+  const nextMetadata: ShoppingMetadata = {
+    ...meta,
+    items: nextItems,
+    progress: recalcShoppingProgress({ ...meta, items: nextItems }),
+  };
+
+  await db.entries.update(entryId, {
+    metadata: nextMetadata,
+    updatedAt: new Date(),
+    syncedAt: null,
+  });
+}
+
 export async function reparseAndUpdateEntry(id: number, newText: string): Promise<void> {
   const existing = await db.entries.get(id);
   if (!existing) return;
@@ -88,7 +160,7 @@ export async function reparseAndUpdateEntry(id: number, newText: string): Promis
 
   const parsed = result.entry;
 
-  // Preserve checked state when re-parsing shopping lists by label
+  // Preserve checked state and amounts when re-parsing shopping lists by label
   let metadata = parsed.metadata ?? null;
   const existingMeta = existing.metadata as ShoppingMetadata | undefined;
   if (
@@ -96,21 +168,24 @@ export async function reparseAndUpdateEntry(id: number, newText: string): Promis
     (metadata as ShoppingMetadata).listKind === 'shopping' &&
     existingMeta?.listKind === 'shopping'
   ) {
-    const checkedMap = new Map<string, boolean>();
+    const existingByLabel = new Map<string, ShoppingMetadata['items'][number]>();
     for (const item of existingMeta.items) {
-      checkedMap.set(item.label.toLowerCase().trim(), item.checked);
+      existingByLabel.set(item.label.toLowerCase().trim(), item);
     }
-    const nextItems = (metadata as ShoppingMetadata).items.map((item) => ({
-      ...item,
-      checked: checkedMap.get(item.label.toLowerCase().trim()) ?? item.checked,
-    }));
+    const nextItems = (metadata as ShoppingMetadata).items.map((item) => {
+      const old = existingByLabel.get(item.label.toLowerCase().trim());
+      return {
+        ...item,
+        checked: old?.checked ?? item.checked,
+        amount: old?.amount ?? item.amount,
+        quantity: old?.quantity ?? item.quantity,
+        unit: old?.unit ?? item.unit,
+      };
+    });
     metadata = {
       ...(metadata as ShoppingMetadata),
       items: nextItems,
-      progress: {
-        total: nextItems.length,
-        checked: nextItems.filter((i) => i.checked).length,
-      },
+      progress: recalcShoppingProgress({ ...(metadata as ShoppingMetadata), items: nextItems }),
     };
   }
 

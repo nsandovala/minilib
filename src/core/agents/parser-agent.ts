@@ -176,10 +176,23 @@ function extractAmount(text: string): { amount: number | null; cleaned: string }
     };
   }
 
-  const fullNumberMatch = text.match(/(\d{3,}(?:[.,]\d{3})*)/);
-  if (fullNumberMatch) {
-    const raw = fullNumberMatch[1].replace(/[.,]/g, '');
+  // CLP with dot/comma as thousands separator: "2.900", "$12.500", "220.000"
+  const clpMatch = text.match(/\$?\s*(\d{1,3}(?:[.,]\d{3})+)/);
+  if (clpMatch) {
+    const raw = clpMatch[1].replace(/[.,]/g, '');
     const num = parseInt(raw, 10);
+    if (num >= 100) {
+      return {
+        amount: num,
+        cleaned: text.replace(clpMatch[0], '').replace(/\s+/g, ' ').trim(),
+      };
+    }
+  }
+
+  // Bare 3+ digit numbers without separators
+  const fullNumberMatch = text.match(/(\d{3,})/);
+  if (fullNumberMatch) {
+    const num = parseInt(fullNumberMatch[1], 10);
     if (num >= 100) {
       return {
         amount: num,
@@ -249,15 +262,23 @@ function extractListMetadata(text: string): {
 export function parseTokens(rawText: string): ExtractedTokens {
   const { time, cleaned: afterTime } = extractTime(rawText);
   const { date, cleaned: afterDate } = extractDate(afterTime);
+
+  // Build shopping list from text with only time/date stripped,
+  // so item-level prices like "pan 2.900" are preserved.
+  const listMeta = extractListMetadata(afterDate);
+
+  // For shopping lists with priced items, avoid stripping the first price
+  // as a global amount. Use the total estimated instead in normalizer.
+  const looksLikeShoppingList = listMeta.shoppingList && listMeta.shoppingList.items.some((i) => i.amount !== undefined);
+
   const { amount, cleaned: afterAmount } = extractAmount(afterDate);
   const keywords = extractKeywords(afterAmount);
-  const listMeta = extractListMetadata(afterAmount);
 
   return {
     rawText,
     time,
     date,
-    amount,
+    amount: looksLikeShoppingList ? null : amount,
     keywords,
     cleanedText: afterAmount,
     checklistItems: listMeta.checklistItems,

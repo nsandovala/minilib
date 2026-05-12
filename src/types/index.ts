@@ -74,18 +74,23 @@ export interface ShoppingItem {
   label: string;
   category: string;
   checked: boolean;
+  amount?: number;
   quantity?: string;
-  estimatedPrice?: number;
+  unit?: string;
+}
+
+export interface ShoppingProgress {
+  total: number;
+  checked: number;
+  totalEstimated: number;
+  totalChecked: number;
 }
 
 export interface ShoppingMetadata {
   listKind: 'shopping';
   storeType: StoreType;
   items: ShoppingItem[];
-  progress: {
-    total: number;
-    checked: number;
-  };
+  progress: ShoppingProgress;
 }
 
 export type EntryMetadata = ShoppingMetadata | Record<string, unknown>;

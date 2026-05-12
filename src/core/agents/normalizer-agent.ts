@@ -114,6 +114,13 @@ export function normalizeEntry(tokens: ExtractedTokens): ParsedEntry {
   const tags = Array.from(new Set([...buildTags(tokens.rawText, type), ...tokens.detectedTags]));
   const metadata = buildShoppingMetadata(tokens);
 
+  // For shopping lists, use total estimated as the entry-level amount
+  // instead of the first extracted number (which may be an item price).
+  const shoppingTotal =
+    metadata && metadata.listKind === 'shopping' && metadata.progress.totalEstimated > 0
+      ? metadata.progress.totalEstimated
+      : undefined;
+
   return {
     text: tokens.rawText,
     type,
@@ -121,7 +128,7 @@ export function normalizeEntry(tokens: ExtractedTokens): ParsedEntry {
     date: tokens.date ?? undefined,
     time: tokens.time ?? undefined,
     tags,
-    amount: tokens.amount ?? undefined,
+    amount: shoppingTotal ?? tokens.amount ?? undefined,
     checklistItems: tokens.checklistItems.length ? tokens.checklistItems : undefined,
     listItems: tokens.listItems.length ? tokens.listItems : undefined,
     listGroups: tokens.listGroups.length ? tokens.listGroups : undefined,
