@@ -94,3 +94,25 @@ export async function replayPending(): Promise<void> {
     }
   }
 }
+
+export async function setBadge(count: number): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    if ('setAppBadge' in navigator) {
+      await (navigator as Navigator & { setAppBadge: (n: number) => Promise<void> }).setAppBadge(count);
+    }
+  } catch {
+    // silent fail
+  }
+}
+
+export async function clearBadge(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    if ('clearAppBadge' in navigator) {
+      await (navigator as Navigator & { clearAppBadge: () => Promise<void> }).clearAppBadge();
+    }
+  } catch {
+    // silent fail
+  }
+}

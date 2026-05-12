@@ -22,22 +22,22 @@ import type { TimelineEntry } from '@/types';
 type ChipFilter = 'all' | 'compra' | 'pago' | 'salud' | 'mascota' | 'casa' | 'calendario';
 
 const CHIPS: { id: ChipFilter; label: string }[] = [
-  { id: 'compra',     label: 'Compra' },
-  { id: 'pago',       label: 'Pago' },
-  { id: 'salud',      label: 'Salud' },
-  { id: 'mascota',    label: 'Mascota' },
-  { id: 'casa',       label: 'Casa' },
+  { id: 'compra', label: 'Compra' },
+  { id: 'pago', label: 'Pago' },
+  { id: 'salud', label: 'Salud' },
+  { id: 'mascota', label: 'Mascota' },
+  { id: 'casa', label: 'Casa' },
   { id: 'calendario', label: 'Calendario' },
 ];
 
 function applyChip(entries: TimelineEntry[], chip: ChipFilter): TimelineEntry[] {
   switch (chip) {
-    case 'compra':    return getPurchaseEntries(entries);
-    case 'pago':      return getPaymentEntries(entries);
-    case 'salud':     return getHealthEntries(entries);
-    case 'mascota':   return getPetEntries(entries);
-    case 'casa':      return entries.filter((e) => e.type === 'task');
-    default:          return entries; // 'calendario' and 'all' show everything
+    case 'compra': return getPurchaseEntries(entries);
+    case 'pago': return getPaymentEntries(entries);
+    case 'salud': return getHealthEntries(entries);
+    case 'mascota': return getPetEntries(entries);
+    case 'casa': return entries.filter((e) => e.type === 'task');
+    default: return entries; // 'calendario' and 'all' show everything
   }
 }
 
@@ -56,8 +56,8 @@ function CalendarIcon() {
     >
       <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
       <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8"  y1="2" x2="8"  y2="6" />
-      <line x1="3"  y1="10" x2="21" y2="10" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
     </svg>
   );
 }
@@ -367,7 +367,9 @@ export default function HomePage() {
           gap: '6px',
           padding: '12px 20px 0',
           overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
           scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
         }}
       >
         {CHIPS.map((chip) => (
