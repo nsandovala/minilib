@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface Star {
   x: number;
@@ -86,6 +86,7 @@ function generateStars(): Star[] {
 }
 
 export default function SpaceBackground(): JSX.Element | null {
+  const [mounted, setMounted] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const scrollYRef = useRef(0);
   const starsRef = useRef<Star[]>([]);
@@ -95,7 +96,11 @@ export default function SpaceBackground(): JSX.Element | null {
   starsRef.current = stars;
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -218,7 +223,7 @@ export default function SpaceBackground(): JSX.Element | null {
     };
   }, []);
 
-  if (typeof window === 'undefined') return null;
+  if (!mounted) return null;
 
   return (
     <canvas

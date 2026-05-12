@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getLocationAndWeather } from '@/lib/weather';
+import { getLocationAndWeather, fetchWeather } from '@/lib/weather';
 import type { WeatherData, WeatherCondition } from '@/lib/weather';
 
 let currentSuggestion: string | null = null;
@@ -17,7 +17,13 @@ function ConditionIcon({
   condition: WeatherCondition;
   isDay: boolean;
 }) {
-  const s = { width: 14, height: 14, stroke: 'currentColor', strokeWidth: 1.6, fill: 'none' } as const;
+  const s = {
+    width: 14,
+    height: 14,
+    stroke: 'currentColor',
+    strokeWidth: 1.6,
+    fill: 'none',
+  } as const;
 
   if (condition === 'clear') {
     if (isDay) {
@@ -118,6 +124,10 @@ function conditionColor(condition: WeatherCondition, isDay: boolean): string {
   return 'rgba(245,240,235,0.5)';
 }
 
+// Valparaíso, Chile — fallback cuando geolocation falla o está en localhost
+const VALPO_LAT = -33.0472;
+const VALPO_LNG = -71.6127;
+
 export default function WeatherPill(): JSX.Element | null {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,7 +137,19 @@ export default function WeatherPill(): JSX.Element | null {
     setMounted(true);
 
     const load = async () => {
-      const data = await getLocationAndWeather();
+      // Intenta con geolocation real primero
+      let data = await getLocationAndWeather();
+
+      // Fallback a Valparaíso si geolocation falla
+      // (localhost sin HTTPS, permisos denegados, etc.)
+      if (!data) {
+        try {
+          data = await fetchWeather(VALPO_LAT, VALPO_LNG);
+        } catch {
+          // Open-Meteo sin conexión — fallo silencioso
+        }
+      }
+
       if (data) {
         setWeather(data);
         currentSuggestion = data.suggestion;
@@ -141,21 +163,22 @@ export default function WeatherPill(): JSX.Element | null {
   }, []);
 
   if (!mounted) return null;
+
   if (loading) {
+    // Punto estático mientras carga — sin animación para evitar keyframe faltante
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: 'var(--text-muted)',
-            animation: 'pulse 1.5s ease-in-out infinite',
-          }}
-        />
-      </div>
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
+          background: 'rgba(245,240,235,0.25)',
+          display: 'inline-block',
+        }}
+      />
     );
   }
+
   if (!weather) return null;
 
   const color = conditionColor(weather.condition, weather.isDay);
