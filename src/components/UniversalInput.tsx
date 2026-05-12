@@ -7,6 +7,7 @@ import type { EntryType } from '@/types';
 
 interface UniversalInputProps {
   onEntryAdded: () => void;
+  weatherHint?: string | null;
 }
 
 const TYPE_COLORS: Record<EntryType, string> = {
@@ -121,7 +122,7 @@ const TOKEN_STYLES: Record<TokenType, React.CSSProperties> = {
     padding: '0 1px',
   },
   plain: {
-    color: 'transparent',
+    color: 'var(--text-primary)',
   },
 };
 
@@ -133,7 +134,7 @@ const INPUT_FONT_STYLE: React.CSSProperties = {
   lineHeight: 1.4,
 };
 
-export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
+export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalInputProps) {
   const [text, setText] = useState('');
   const [previewType, setPreviewType] = useState<EntryType | null>(null);
   const [previewDate, setPreviewDate] = useState<string | null>(null);
@@ -240,7 +241,11 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="¿Qué pendiente tienes?"
+              placeholder={
+                text.length === 0 && weatherHint
+                  ? `${weatherHint}... o escribe cualquier pendiente`
+                  : '¿Qué pendiente tienes?'
+              }
               style={{
                 position: 'relative',
                 zIndex: 2,

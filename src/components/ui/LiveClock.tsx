@@ -42,12 +42,6 @@ export default function LiveClock(): JSX.Element | null {
         flexDirection: 'column',
         alignItems: 'flex-end',
         gap: '1px',
-        padding: '5px 10px',
-        background: 'rgba(255,248,240,0.06)',
-        border: '1px solid rgba(255,248,240,0.1)',
-        borderRadius: '12px',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
       }}
     >
       <span

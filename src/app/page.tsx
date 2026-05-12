@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useAuth, UserButton } from '@clerk/nextjs';
 import { useEntries } from '@/hooks/useEntries';
 import {
@@ -15,6 +15,8 @@ import UniversalInput from '@/components/UniversalInput';
 import TimelineView from '@/components/TimelineView';
 import MiniCalendar from '@/components/MiniCalendar';
 import LiveClock from '@/components/ui/LiveClock';
+import WeatherPill from '@/components/ui/WeatherPill';
+import { getLocationAndWeather } from '@/lib/weather';
 import type { TimelineEntry } from '@/types';
 
 type ChipFilter = 'all' | 'compra' | 'pago' | 'salud' | 'mascota' | 'casa' | 'calendario';
@@ -114,6 +116,15 @@ export default function HomePage() {
 
   const pendingCount = useMemo(() => getPendingCount(entries), [entries]);
   const handleRefresh = () => void 0;
+  const [weatherHint, setWeatherHint] = useState<string | null>(null);
+
+  useEffect(() => {
+    const checkWeather = async () => {
+      const w = await getLocationAndWeather();
+      if (w?.suggestion) setWeatherHint(w.suggestion);
+    };
+    checkWeather();
+  }, []);
 
   const toggleChip = (chip: ChipFilter) => {
     setActiveChip((prev) => (prev === chip ? 'all' : chip));
@@ -329,7 +340,8 @@ export default function HomePage() {
             </p>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <WeatherPill />
           <LiveClock />
           <UserButton
             afterSignOutUrl="/"
@@ -343,7 +355,7 @@ export default function HomePage() {
       </div>
 
       <div style={{ marginTop: '18px' }}>
-        <UniversalInput onEntryAdded={handleRefresh} />
+        <UniversalInput onEntryAdded={handleRefresh} weatherHint={weatherHint} />
       </div>
 
       <DailySummary entries={entries} />
