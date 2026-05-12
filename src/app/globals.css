@@ -8,7 +8,7 @@
   *, *::before, *::after { box-sizing: border-box; }
 
   :root {
-    --bg-void: #11100f;
+    --bg-void: #0a0805;
     --bg-matte: #181614;
     --bg-surface: rgba(255, 248, 240, 0.04);
     --bg-surface-hover: rgba(255, 248, 240, 0.07);
@@ -45,12 +45,7 @@
 
   body {
     font-family: var(--font);
-    background:
-      radial-gradient(ellipse at 20% 0%, rgba(201, 168, 130, 0.07) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 30%, rgba(176, 154, 184, 0.04) 0%, transparent 40%),
-      radial-gradient(ellipse at 50% 100%, rgba(122, 158, 126, 0.04) 0%, transparent 45%),
-      var(--bg-void);
-    background-color: var(--bg-void);
+    background-color: #0a0805;
     color: var(--text-primary);
     min-height: 100vh;
     overflow-x: hidden;
@@ -270,4 +265,15 @@
   .text-secondary { color: var(--text-secondary); }
   .text-tertiary { color: var(--text-tertiary); }
   .text-muted { color: var(--text-muted); }
+
+  .content-layer {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Ensure cards have enough contrast against space bg */
+  .glass-card {
+    background: rgba(255, 248, 240, 0.055);
+    border-color: rgba(255, 248, 240, 0.09);
+  }
 }

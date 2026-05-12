@@ -1,9 +1,15 @@
 import type { Metadata, Viewport } from 'next';
+import dynamic from 'next/dynamic';
 import { ClerkProvider } from '@clerk/nextjs';
 import './globals.css';
 import BottomNav from '@/components/ui/BottomNav';
 import NotificationBanner from '@/components/ui/NotificationBanner';
 import AppInit from '@/components/ui/AppInit';
+
+const SpaceBackground = dynamic(
+  () => import('@/components/ui/SpaceBackground'),
+  { ssr: false }
+);
 
 export const metadata: Metadata = {
   title: 'MiniLib',
@@ -33,10 +39,11 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="es">
         <body>
+          <SpaceBackground />
           <div aria-hidden="true">
             <div className="bg-grain" />
           </div>
-          <main style={{ position: 'relative', zIndex: 1, paddingBottom: '72px' }}>
+          <main className="content-layer" style={{ paddingBottom: '72px' }}>
             {children}
           </main>
           <NotificationBanner />
