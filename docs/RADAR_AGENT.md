@@ -59,23 +59,46 @@ Deterministic outputs:
 - `detectedTags[]`: semantic tags (frutas, lácteos, aseo hogar…)
 - `metadata`: canonical structured state for shopping lists
 
+## Cognitive Agent: `list_builder`
+The `list_builder` agent is the first implemented cognitive agent. It is fully deterministic, lives in `src/core/agents/list-builder-agent.ts`, and is integrated into the parser/normalizer pipeline.
+
+Responsibilities:
+- Strip shopping intro phrases
+- Detect comma-separated items
+- Detect store type (`supermercado`, `feria`, `farmacia`, `otro`)
+- Classify each item into a deterministic category
+- Emit `ShoppingListBuildResult` consumed by `normalizer-agent.ts`
+
+### Deterministic Fixtures
+| Input | Expected storeType | Expected items (labels only) | Expected categories |
+|---|---|---|---|
+| `comprar en el super, fideos, huevos, leche` | `supermercado` | fideos, huevos, leche | despensa, despensa, lácteos |
+| `feria, tomate, palta, cebolla` | `feria` | tomate, palta, cebolla | frutas/verduras, frutas/verduras, frutas/verduras |
+| `farmacia, paracetamol, vitaminas` | `farmacia` | paracetamol, vitaminas | farmacia, farmacia |
+| `lista de compras, pan, mantequilla, jugo` | `otro` | pan, mantequilla, jugo | panadería, lácteos, bebestibles |
+| `necesito comprar, arroz, leche, papel` | `otro` | arroz, leche, papel | despensa, lácteos, aseo |
+
 ## Item Categories (Deterministic)
 The parser classifies each shopping item into a deterministic category:
-- **lácteos**: leche, yogurt, yogur, queso, mantequilla
-- **huevos/despensa**: huevos, arroz, fideos, azúcar, harina, aceite, pan integral
-- **frutas/verduras**: tomate, palta, paltas, lechuga, cebolla, papas, frutas, verduras, plátano, limones
-- **panadería**: pan, hallulla, marraqueta, pan batido, colizas
-- **aseo**: confort, papel, cloro, detergente, lavaloza
-- **bebestibles**: bebida, bebidas, jugo, agua  
+- **lácteos**: leche, yogurt, yogur, queso, mantequilla, crema
+- **despensa**: huevos, arroz, fideos, azúcar, harina, aceite, sal, lentejas, garbanzos, atún, sopa, avena, cereal
+- **frutas/verduras**: tomate, palta, paltas, lechuga, cebolla, papas, frutas, verduras, plátano, limones, manzana, naranja, zanahoria
+- **panadería**: pan, hallulla, marraqueta, baguette, colizas, tortillas
+- **aseo**: confort, papel, cloro, detergente, lavaloza, jabón, shampoo, pasta dental, desodorante
+- **bebestibles**: bebida, bebidas, jugo, agua, cerveza, vino, café, té, refresco
+- **farmacia**: paracetamol, ibuprofeno, vitamina, vitaminas, remedio, pastilla, jarabe, gotas, curita
+- **mascotas**: correa, collar, juguete, arena, comida perro, alimento gato, desparasitario
 - **otros**: fallback
 
 ## Intro Cleaning
 Before splitting comma-separated input into items, the parser strips introductory phrases so the checklist contains only real products:
 - `comprar en el super`
+- `comprar en supermercado`
 - `lista de compras`
 - `necesito comprar`
-- `traer de el super`
-- `ir a comprar`
+- `pasar al super por`
+- `traer`
+- `comprar`
 - `supermercado`
 - `en el super`
 
@@ -97,10 +120,10 @@ Derived dynamically from item state — not stored:
 ## Future Layers
 Inventory tracking, recurring basket intelligence, and estimated pricing remain future layers built on top of the structured checklist foundation.
 
-## Planned Cognitive Agents
-- calm_parser
-- radar
-- list_builder
-- finance_parser
-- calendar_parser
-- docs_guardian
+## Cognitive Agent Status
+- calm_parser → planned
+- radar → planned
+- **list_builder → active** (`src/core/agents/list-builder-agent.ts`)
+- finance_parser → planned
+- calendar_parser → planned
+- docs_guardian → active

@@ -98,23 +98,13 @@ function buildTags(rawText: string, type: EntryType): string[] {
 }
 
 function buildShoppingMetadata(tokens: ExtractedTokens): ShoppingMetadata | undefined {
-  if (!tokens.isListLike || tokens.categorizedItems.length === 0) return undefined;
-
-  const items = tokens.categorizedItems.map((item) => ({
-    id: crypto.randomUUID(),
-    label: item.label,
-    category: item.category,
-    checked: false,
-  }));
+  if (!tokens.shoppingList) return undefined;
 
   return {
-    listKind: 'shopping',
-    storeType: tokens.storeType ?? 'otro',
-    items,
-    progress: {
-      total: items.length,
-      checked: 0,
-    },
+    listKind: tokens.shoppingList.listKind,
+    storeType: tokens.shoppingList.storeType,
+    items: tokens.shoppingList.items,
+    progress: tokens.shoppingList.progress,
   };
 }
 

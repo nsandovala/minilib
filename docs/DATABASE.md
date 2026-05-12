@@ -43,7 +43,7 @@ For MVP, shopping lists store their structured state inside `entries.metadata` a
 - `items`: Array of objects:
   - `id`: UUID
   - `label`: string
-  - `category`: deterministic category (`lácteos`, `huevos/despensa`, `frutas/verduras`, `panadería`, `aseo`, `bebestibles`, `otros`)
+  - `category`: deterministic category (`lácteos`, `despensa`, `frutas/verduras`, `panadería`, `aseo`, `bebestibles`, `farmacia`, `mascotas`, `otros`)
   - `checked`: boolean
   - `quantity?`: string
   - `estimatedPrice?`: number

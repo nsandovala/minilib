@@ -31,6 +31,7 @@
 - **Card editing**: inline text edit with re-parsing and Dexie update
 - **Clean shopping parser**: intro phrases stripped before item extraction
 - **Completed cards visually dimmed** (0.45 opacity)
+- **list_builder cognitive agent**: deterministic shopping-list builder with category classification (`src/core/agents/list-builder-agent.ts`)
 
 ## IN PROGRESS
 - radar agent enhancements
@@ -40,7 +41,7 @@
 ## Planned Cognitive Agents
 - calm_parser
 - radar
-- list_builder
+- ~~list_builder~~ → **DONE**
 - finance_parser
 - calendar_parser
 - docs_guardian

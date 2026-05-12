@@ -1,3 +1,5 @@
+import { buildShoppingList, type ShoppingListBuildResult } from './list-builder-agent';
+
 export interface ExtractedTokens {
   rawText: string;
   time: string | null;
@@ -12,109 +14,7 @@ export interface ExtractedTokens {
   isListLike: boolean;
   storeType: 'supermercado' | 'feria' | 'farmacia' | 'otro' | null;
   categorizedItems: { label: string; category: string }[];
-}
-
-const LIST_CATEGORY_RULES = [
-  { pattern: /\bfrutas?\b/i, tag: 'frutas' },
-  { pattern: /\bverduras?\b/i, tag: 'verduras' },
-  { pattern: /\b(lacteos|lácteos|leche|yogurt|yogur|queso)\b/i, tag: 'lácteos' },
-  { pattern: /\b(carnes?|pollo|vacuno|cerdo|pescado)\b/i, tag: 'carnes' },
-  { pattern: /\b(panaderia|panadería|pan|bolleria|bollería|hallulla|marraqueta)\b/i, tag: 'panadería' },
-  { pattern: /\b(aseo|limpieza|detergente|cloro|desinfectante|papel higienico|papel higiénico|articulos de aseo|artículos de aseo|confort|papel|lavaloza)\b/i, tag: 'aseo hogar' },
-  { pattern: /\b(farmacia|remedio|medicina|pastilla|vitamina)\b/i, tag: 'farmacia' },
-  { pattern: /\b(mascota|perro|gato|arena|comida para mascota|alimento para mascota)\b/i, tag: 'mascotas' },
-  { pattern: /\b(despensa|arroz|fideos|legumbres|aceite|harina|azucar|azúcar|huevos)\b/i, tag: 'despensa' },
-  { pattern: /\b(casa|hogar)\b/i, tag: 'casa' },
-  { pattern: /\b(bebida|bebidas|jugo|agua)\b/i, tag: 'bebestibles' },
-];
-
-const SHOPPING_CATEGORY_MAP: Record<string, string> = {
-  // lácteos
-  leche: 'lácteos',
-  yogurt: 'lácteos',
-  yogur: 'lácteos',
-  queso: 'lácteos',
-  mantequilla: 'lácteos',
-  // huevos/despensa
-  huevos: 'huevos/despensa',
-  arroz: 'huevos/despensa',
-  fideos: 'huevos/despensa',
-  azúcar: 'huevos/despensa',
-  azucar: 'huevos/despensa',
-  harina: 'huevos/despensa',
-  aceite: 'huevos/despensa',
-  // frutas/verduras
-  tomate: 'frutas/verduras',
-  palta: 'frutas/verduras',
-  paltas: 'frutas/verduras',
-  lechuga: 'frutas/verduras',
-  cebolla: 'frutas/verduras',
-  papas: 'frutas/verduras',
-  frutas: 'frutas/verduras',
-  verduras: 'frutas/verduras',
-  // panadería
-  pan: 'panadería',
-  hallulla: 'panadería',
-  marraqueta: 'panadería',
-  // aseo
-  confort: 'aseo',
-  papel: 'aseo',
-  cloro: 'aseo',
-  detergente: 'aseo',
-  lavaloza: 'aseo',
-  // bebestibles
-  bebida: 'bebestibles',
-  bebidas: 'bebestibles',
-  jugo: 'bebestibles',
-  agua: 'bebestibles',
-};
-
-const STORE_TYPE_PATTERNS: { pattern: RegExp; type: 'supermercado' | 'feria' | 'farmacia' }[] = [
-  { pattern: /\b(supermercado|super|en el super|en el supermercado)\b/i, type: 'supermercado' },
-  { pattern: /\bferia\b/i, type: 'feria' },
-  { pattern: /\bfarmacia\b/i, type: 'farmacia' },
-];
-
-function detectStoreType(text: string): 'supermercado' | 'feria' | 'farmacia' | 'otro' {
-  for (const rule of STORE_TYPE_PATTERNS) {
-    if (rule.pattern.test(text)) return rule.type;
-  }
-  return 'otro';
-}
-
-function classifyItemCategory(label: string): string {
-  const normalized = label.toLowerCase().trim();
-  // Remove trailing 's' for simple plural matching
-  const singular = normalized.replace(/s$/, '');
-  return SHOPPING_CATEGORY_MAP[normalized] ?? SHOPPING_CATEGORY_MAP[singular] ?? 'otros';
-}
-
-function normalizeListItem(item: string): string {
-  return item
-    .replace(/^[,;.\-\s]+/, '')
-    .replace(/[;.\s]+$/, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-const SHOPPING_INTRO_PATTERNS = [
-  /\bcomprar\s+en\s+(?:el\s+)?(?:super(?:mercado)?|mercado|super)\b/gi,
-  /\blista\s+(?:de\s+)?(?:compras|supermercado|super)\b/gi,
-  /\bnecesito\s+(?:comprar|traer)\b/gi,
-  /\btraer\s+(?:de\s+)?(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
-  /\bir\s+a\s+(?:comprar|el\s+super|el\s+mercado)\b/gi,
-  /\bcomprar\b/gi,
-  /\bsupermercado\b/gi,
-  /\ben\s+el\s+super\b/gi,
-  /\blista\s+de\b/gi,
-];
-
-function cleanShoppingIntro(text: string): string {
-  let cleaned = text;
-  for (const pattern of SHOPPING_INTRO_PATTERNS) {
-    cleaned = cleaned.replace(pattern, ' ');
-  }
-  return cleaned.replace(/\s+/g, ' ').trim();
+  shoppingList: ShoppingListBuildResult | null;
 }
 
 const DAY_MAP: Record<string, number> = {
@@ -314,46 +214,35 @@ function extractListMetadata(text: string): {
   isListLike: boolean;
   storeType: 'supermercado' | 'feria' | 'farmacia' | 'otro' | null;
   categorizedItems: { label: string; category: string }[];
+  shoppingList: ShoppingListBuildResult | null;
 } {
-  const normalized = cleanShoppingIntro(text.trim());
-  const commaParts = normalized
-    .split(/[,;]/)
-    .map(normalizeListItem)
-    .filter(Boolean);
+  const shoppingList = buildShoppingList(text);
 
-  const hasCommaList = commaParts.length >= 2;
-  const listItems = hasCommaList ? commaParts : [];
-
-  const matchedTags = new Set<string>();
-  const haystacks = (listItems.length ? listItems : [normalized]).map((item) => item.toLowerCase());
-
-  for (const haystack of haystacks) {
-    for (const rule of LIST_CATEGORY_RULES) {
-      if (rule.pattern.test(haystack)) {
-        matchedTags.add(rule.tag);
-      }
-    }
+  if (!shoppingList) {
+    return {
+      checklistItems: [],
+      listItems: [],
+      listGroups: [],
+      detectedTags: [],
+      isListLike: false,
+      storeType: null,
+      categorizedItems: [],
+      shoppingList: null,
+    };
   }
 
-  const detectedTags = Array.from(matchedTags);
-  const listGroups = detectedTags.filter((tag) => tag !== 'casa');
-  const isListLike = hasCommaList || detectedTags.length >= 2;
-
-  const storeType = isListLike ? detectStoreType(normalized) : null;
-
-  const categorizedItems = listItems.map((label) => ({
-    label,
-    category: classifyItemCategory(label),
-  }));
+  const listItems = shoppingList.items.map((i) => i.label);
+  const listGroups = shoppingList.detectedTags.filter((tag) => tag !== 'casa');
 
   return {
-    checklistItems: isListLike ? (listItems.length ? listItems : [normalized]) : [],
-    listItems: isListLike ? (listItems.length ? listItems : [normalized]) : [],
-    listGroups: isListLike ? listGroups : [],
-    detectedTags: isListLike ? detectedTags : [],
-    isListLike,
-    storeType,
-    categorizedItems,
+    checklistItems: listItems,
+    listItems,
+    listGroups,
+    detectedTags: shoppingList.detectedTags,
+    isListLike: true,
+    storeType: shoppingList.storeType,
+    categorizedItems: shoppingList.items.map((i) => ({ label: i.label, category: i.category })),
+    shoppingList,
   };
 }
 
@@ -378,6 +267,7 @@ export function parseTokens(rawText: string): ExtractedTokens {
     isListLike: listMeta.isListLike,
     storeType: listMeta.storeType,
     categorizedItems: listMeta.categorizedItems,
+    shoppingList: listMeta.shoppingList,
   };
 }
 
