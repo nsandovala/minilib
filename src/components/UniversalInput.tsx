@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { processInput, previewInput } from '@/core/agents/orchestrator';
 import { addEntry } from '@/db/entries';
 import type { EntryType } from '@/types';
@@ -31,6 +31,108 @@ const TYPE_LABELS: Record<EntryType, string> = {
   shopping_list: 'lista de compras',
 };
 
+/* ─── Token types ─────────────────────────────────────────────────────────── */
+
+type TokenType = 'amount' | 'date' | 'time' | 'plain';
+
+interface Token {
+  text: string;
+  type: TokenType;
+}
+
+const DATE_WORDS = new Set([
+  'hoy','mañana','manana','lunes','martes','miercoles','miércoles',
+  'jueves','viernes','sabado','sábado','domingo',
+  'enero','febrero','marzo','abril','mayo','junio',
+  'julio','agosto','septiembre','octubre','noviembre','diciembre',
+]);
+
+function tokenizeInput(text: string): Token[] {
+  if (!text) return [];
+
+  const chars: TokenType[] = new Array(text.length).fill('plain');
+
+  // 1. Mark TIME ranges
+  const timeRegex = /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\ba\s+las?\s+\d\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = timeRegex.exec(text)) !== null) {
+    for (let i = m.index; i < m.index + m[0].length; i++) chars[i] = 'time';
+  }
+
+  // 2. Mark AMOUNT ranges (skip already marked)
+  const amountRegex = /\b\d{4,}|\d+[kK]\b|\d{1,3}(?:\.\d{3})+/g;
+  while ((m = amountRegex.exec(text)) !== null) {
+    let allPlain = true;
+    for (let i = m.index; i < m.index + m[0].length; i++) {
+      if (chars[i] !== 'plain') { allPlain = false; break; }
+    }
+    if (allPlain) {
+      for (let i = m.index; i < m.index + m[0].length; i++) chars[i] = 'amount';
+    }
+  }
+
+  // 3. Mark DATE words (skip already marked)
+  const wordRegex = /\b[a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ]+\b/g;
+  while ((m = wordRegex.exec(text)) !== null) {
+    const word = m[0].toLowerCase();
+    if (DATE_WORDS.has(word)) {
+      let allPlain = true;
+      for (let i = m.index; i < m.index + m[0].length; i++) {
+        if (chars[i] !== 'plain') { allPlain = false; break; }
+      }
+      if (allPlain) {
+        for (let i = m.index; i < m.index + m[0].length; i++) chars[i] = 'date';
+      }
+    }
+  }
+
+  // 4. Group consecutive chars into tokens
+  const tokens: Token[] = [];
+  let current = chars[0];
+  let start = 0;
+  for (let i = 1; i <= chars.length; i++) {
+    if (i === chars.length || chars[i] !== current) {
+      tokens.push({ text: text.slice(start, i), type: current });
+      if (i < chars.length) {
+        current = chars[i];
+        start = i;
+      }
+    }
+  }
+  return tokens;
+}
+
+const TOKEN_STYLES: Record<TokenType, React.CSSProperties> = {
+  amount: {
+    color: '#7a9e7e',
+    fontWeight: 600,
+    background: 'rgba(122,158,126,0.12)',
+    borderRadius: '3px',
+    padding: '0 2px',
+  },
+  date: {
+    color: '#c9a882',
+    background: 'rgba(201,168,130,0.10)',
+    borderRadius: '3px',
+    padding: '0 2px',
+  },
+  time: {
+    color: '#b09ab8',
+    padding: '0 1px',
+  },
+  plain: {
+    color: 'transparent',
+  },
+};
+
+const INPUT_FONT_STYLE: React.CSSProperties = {
+  fontSize: '15px',
+  fontFamily: 'var(--font)',
+  fontWeight: 400,
+  letterSpacing: 'normal',
+  lineHeight: 1.4,
+};
+
 export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
   const [text, setText] = useState('');
   const [previewType, setPreviewType] = useState<EntryType | null>(null);
@@ -41,6 +143,8 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
   const [justSaved, setJustSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const tokens = useMemo(() => tokenizeInput(text), [text]);
 
   useEffect(() => {
     const preview = previewInput(text);
@@ -100,33 +204,59 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
             gap: '6px',
             transition: 'border-color 0.2s ease',
             ...(justSaved
-              ? {
-                  borderColor: 'rgba(122, 158, 126, 0.35)',
-                }
+              ? { borderColor: 'rgba(122, 158, 126, 0.35)' }
               : error
-              ? {
-                  borderColor: 'rgba(196, 112, 112, 0.35)',
-                }
+              ? { borderColor: 'rgba(196, 112, 112, 0.35)' }
               : {}),
           }}
         >
-          <input
-            ref={inputRef}
-            type="text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="¿Qué pendiente tienes?"
-            style={{
-              flex: 1,
-              background: 'none',
-              border: 'none',
-              padding: '12px 10px',
-              fontSize: '15px',
-              color: 'var(--text-primary)',
-              outline: 'none',
-            }}
-            aria-label="Nueva entrada"
-          />
+          {/* Layered input container */}
+          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+            {/* Layer 1 — highlight */}
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                pointerEvents: 'none',
+                zIndex: 1,
+                padding: '12px 10px',
+                ...INPUT_FONT_STYLE,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                overflow: 'hidden',
+              }}
+            >
+              {tokens.map((t, i) => (
+                <span key={i} style={TOKEN_STYLES[t.type]}>
+                  {t.text}
+                </span>
+              ))}
+            </div>
+
+            {/* Layer 2 — real input */}
+            <input
+              ref={inputRef}
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="¿Qué pendiente tienes?"
+              style={{
+                position: 'relative',
+                zIndex: 2,
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                padding: '12px 10px',
+                outline: 'none',
+                color: 'transparent',
+                caretColor: 'var(--text-primary)',
+                ...INPUT_FONT_STYLE,
+              }}
+              aria-label="Nueva entrada"
+            />
+          </div>
+
           <button
             type="submit"
             disabled={!text.trim() || saving}
@@ -231,12 +361,16 @@ export default function UniversalInput({ onEntryAdded }: UniversalInputProps) {
           >
             {TYPE_LABELS[previewType]}
           </span>
-          {previewAmount && (
+          {previewAmount !== null && (
             <span
               className="chip"
               style={{ fontSize: '10px', padding: '2px 7px' }}
             >
-              ${previewAmount.toLocaleString('es-CL')}
+              {new Intl.NumberFormat('es-CL', {
+                style: 'currency',
+                currency: 'CLP',
+                minimumFractionDigits: 0,
+              }).format(previewAmount)}
             </span>
           )}
           {previewDate && (

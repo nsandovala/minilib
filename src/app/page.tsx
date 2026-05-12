@@ -14,6 +14,7 @@ import {
 import UniversalInput from '@/components/UniversalInput';
 import TimelineView from '@/components/TimelineView';
 import MiniCalendar from '@/components/MiniCalendar';
+import LiveClock from '@/components/ui/LiveClock';
 import type { TimelineEntry } from '@/types';
 
 type ChipFilter = 'all' | 'compra' | 'pago' | 'salud' | 'mascota' | 'casa' | 'calendario';
@@ -328,14 +329,17 @@ export default function HomePage() {
             </p>
           )}
         </div>
-        <UserButton
-          afterSignOutUrl="/"
-          appearance={{
-            elements: {
-              userButtonAvatarBox: 'size-8',
-            },
-          }}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <LiveClock />
+          <UserButton
+            afterSignOutUrl="/"
+            appearance={{
+              elements: {
+                userButtonAvatarBox: 'size-8',
+              },
+            }}
+          />
+        </div>
       </div>
 
       <div style={{ marginTop: '18px' }}>
