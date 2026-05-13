@@ -38,13 +38,17 @@ type CreateEntryInput = Pick<TimelineEntry, 'text' | 'title' | 'type'> &
 
 export async function createEntry(data: CreateEntryInput): Promise<number> {
   try {
-    // Dedup: return the existing id if an identical entry was created in the last 5 s
-    const fiveSecondsAgo = new Date(Date.now() - 5000);
-    const dup = await db.entries
-      .where('createdAt').above(fiveSecondsAgo)
-      .filter((e) => e.type === data.type && e.text === data.text)
-      .first();
-    if (dup?.id !== undefined) return dup.id as number;
+    // Dedup: non-fatal — return existing id if identical entry created in the last 5 s
+    try {
+      const fiveSecondsAgo = new Date(Date.now() - 5000);
+      const dup = await db.entries
+        .where('createdAt').above(fiveSecondsAgo)
+        .filter((e) => e.type === data.type && e.text === data.text)
+        .first();
+      if (dup?.id !== undefined) return dup.id as number;
+    } catch {
+      // IDB index unavailable — skip dedup, proceed with insert
+    }
 
     const now = new Date();
     const localId = generateUUID();
@@ -84,6 +88,11 @@ export async function createEntry(data: CreateEntryInput): Promise<number> {
     return id as number;
   } catch (err) {
     devError('createEntry failed', err);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('liev:last-save-error', `${new Date().toISOString()} — ${String(err).slice(0, 120)}`);
+      } catch { /* storage full or unavailable */ }
+    }
     throw err;
   }
 }

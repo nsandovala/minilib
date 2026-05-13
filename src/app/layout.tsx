@@ -11,8 +11,13 @@ const SpaceBackground = dynamic(
   { ssr: false }
 );
 
+const DebugPanel = dynamic(
+  () => import('@/components/ui/DebugPanel'),
+  { ssr: false }
+);
+
 export const metadata: Metadata = {
-  title: 'MiniLib',
+  title: 'Liev',
   description: 'Tu libreta viva contextual, siempre contigo',
   manifest: '/manifest.json',
   icons: {
@@ -20,12 +25,15 @@ export const metadata: Metadata = {
       { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
       { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
-    apple: '/icons/icon-192.png',
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
   },
   appleWebApp: {
     capable: true,
     title: 'Liev',
     statusBarStyle: 'black-translucent',
+    startupImage: '/apple-touch-icon.png',
   },
 };
 
@@ -56,6 +64,7 @@ export default function RootLayout({
           <NotificationBanner />
           <BottomNav />
           <AppInit />
+          <DebugPanel />
         </body>
       </html>
     </ClerkProvider>

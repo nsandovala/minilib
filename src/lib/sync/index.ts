@@ -15,11 +15,18 @@ export async function sync(): Promise<void> {
   try {
     await pull();
     await push();
+    try {
+      localStorage.setItem('liev:last-sync-ok', new Date().toISOString());
+      localStorage.removeItem('liev:last-sync-error');
+    } catch { /* storage unavailable */ }
   } catch (err) {
     // Offline-first: sync errors are non-fatal
     if (process.env.NODE_ENV !== 'production') {
       console.warn('[sync]', err);
     }
+    try {
+      localStorage.setItem('liev:last-sync-error', `${new Date().toISOString()} — ${String(err).slice(0, 120)}`);
+    } catch { /* storage unavailable */ }
   } finally {
     _running = false;
   }

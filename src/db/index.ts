@@ -184,8 +184,14 @@ function createStubDB(): MiniLibDB {
   const noopArr = async () => [];
   const noopNull = async () => null;
   const noop = async () => { };
+  const rangeStub = { filter: () => ({ first: noopNull, toArray: noopArr }), first: noopNull, toArray: noopArr };
   const whereStub = () => ({
-    equals: () => ({ first: noopNull, toArray: noopArr, modify: noop, delete: noop }),
+    equals:       () => ({ first: noopNull, toArray: noopArr, modify: noop, delete: noop }),
+    above:        () => rangeStub,
+    aboveOrEqual: () => rangeStub,
+    below:        () => rangeStub,
+    belowOrEqual: () => rangeStub,
+    between:      () => rangeStub,
   });
   const tableStub = {
     toArray: noopArr, add: async () => 0, update: noop, delete: noop,

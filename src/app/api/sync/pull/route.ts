@@ -45,16 +45,26 @@ function cloudItemToPayload(row: CloudChecklistItem): ChecklistItemPayload {
 export async function GET(): Promise<Response> {
   const { userId } = await auth();
   if (!userId) {
+    if (process.env.NODE_ENV !== 'production') console.warn('[pull] 401 — no userId from Clerk');
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const [entryRows, itemRows] = await Promise.all([
-    getEntriesForUser(userId),
-    getChecklistItemsForUser(userId),
-  ]);
+  try {
+    const [entryRows, itemRows] = await Promise.all([
+      getEntriesForUser(userId),
+      getChecklistItemsForUser(userId),
+    ]);
 
-  return Response.json({
-    entries:       entryRows.map(cloudEntryToPayload),
-    checklistItems: itemRows.map(cloudItemToPayload),
-  });
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[pull] 200 — entries:${entryRows.length} items:${itemRows.length}`);
+    }
+
+    return Response.json({
+      entries:        entryRows.map(cloudEntryToPayload),
+      checklistItems: itemRows.map(cloudItemToPayload),
+    });
+  } catch (err) {
+    console.error('[pull] 500 —', err instanceof Error ? err.message : 'unknown error');
+    return Response.json({ error: 'Internal error' }, { status: 500 });
+  }
 }

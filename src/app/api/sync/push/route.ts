@@ -40,6 +40,7 @@ function checklistItemToInsert(userId: string, p: ChecklistItemPayload): CloudCh
 export async function POST(req: Request): Promise<Response> {
   const { userId } = await auth();
   if (!userId) {
+    if (process.env.NODE_ENV !== 'production') console.warn('[push] 401 — no userId from Clerk');
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -57,10 +58,19 @@ export async function POST(req: Request): Promise<Response> {
   const entryRows = body.entries.map((p) => entryToInsert(userId, p));
   const itemRows  = (body.checklistItems ?? []).map((p) => checklistItemToInsert(userId, p));
 
-  await Promise.all([
-    upsertEntries(entryRows),
-    upsertChecklistItems(itemRows),
-  ]);
+  try {
+    await Promise.all([
+      upsertEntries(entryRows),
+      upsertChecklistItems(itemRows),
+    ]);
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[push] 200 — entries:${entryRows.length} items:${itemRows.length}`);
+    }
+  } catch (err) {
+    console.error('[push] 500 —', err instanceof Error ? err.message : 'unknown error');
+    return Response.json({ error: 'Internal error' }, { status: 500 });
+  }
 
   return Response.json({ ok: true, entries: entryRows.length, checklistItems: itemRows.length });
 }
