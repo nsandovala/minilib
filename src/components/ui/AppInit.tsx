@@ -18,7 +18,25 @@ export default function AppInit(): null {
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      sync();
+      const forceSync = async () => {
+        try {
+          const { db } = await import('@/db')
+          const unsynced = await db.entries
+            .filter((e: { syncedAt?: Date | null }) => !e.syncedAt)
+            .toArray()
+          for (const entry of unsynced) {
+            if (entry.id) {
+              await db.entries.update(entry.id, {
+                updatedAt: entry.updatedAt ?? entry.createdAt,
+              })
+            }
+          }
+        } catch {
+          // silent fail
+        }
+        sync()
+      }
+      forceSync()
     }
   }, [isLoaded, isSignedIn]);
 

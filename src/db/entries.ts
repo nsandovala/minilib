@@ -7,6 +7,14 @@ type CreateEntryInput = Pick<TimelineEntry, 'text' | 'title' | 'type'> &
   Partial<Pick<TimelineEntry, 'date' | 'time' | 'tags' | 'done' | 'amount' | 'checklistItems' | 'listItems' | 'listGroups' | 'detectedTags' | 'metadata'>>;
 
 export async function createEntry(data: CreateEntryInput): Promise<number> {
+  // Dedup: return the existing id if an identical entry was created in the last 5 s
+  const fiveSecondsAgo = new Date(Date.now() - 5000);
+  const dup = await db.entries
+    .where('createdAt').above(fiveSecondsAgo)
+    .filter((e) => e.type === data.type && e.text === data.text)
+    .first();
+  if (dup?.id !== undefined) return dup.id as number;
+
   const now = new Date();
   const localId = crypto.randomUUID();
   const id = await db.entries.add({

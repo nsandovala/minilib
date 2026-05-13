@@ -64,13 +64,12 @@ function CalendarIcon() {
 
 function DailySummary({ entries }: { entries: TimelineEntry[] }) {
   const today = new Date().toISOString().split('T')[0];
-  const nextWeek = new Date();
-  nextWeek.setDate(nextWeek.getDate() + 7);
-  const nextWeekKey = nextWeek.toISOString().split('T')[0];
 
   const todayCount = entries.filter((entry) => entry.date === today && !entry.done).length;
-  const nextDaysCount = entries.filter((entry) => !!entry.date && entry.date > today && entry.date <= nextWeekKey && !entry.done).length;
-  const noDateCount = entries.filter((entry) => !entry.date && !entry.done).length;
+  const pendingPayments = entries.filter((entry) => entry.type === 'payment' && !entry.done).length;
+  const shoppingEstimated = entries
+    .filter((entry) => entry.type === 'shopping_list' && !entry.done && typeof entry.amount === 'number')
+    .reduce((sum, entry) => sum + (entry.amount ?? 0), 0);
 
   return (
     <div
@@ -85,20 +84,26 @@ function DailySummary({ entries }: { entries: TimelineEntry[] }) {
       }}
     >
       <SummaryCell label="Hoy" value={todayCount} />
-      <SummaryCell label="Próximos días" value={nextDaysCount} />
-      <SummaryCell label="Sin fecha" value={noDateCount} />
+      <SummaryCell label="Compras est." value={shoppingEstimated} money />
+      <SummaryCell label="Pagos pend." value={pendingPayments} />
     </div>
   );
 }
 
-function SummaryCell({ label, value }: { label: string; value: number }) {
+function SummaryCell({ label, value, money }: { label: string; value: number; money?: boolean }) {
+  const display = money
+    ? value > 0
+      ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(value)
+      : '—'
+    : String(value);
+
   return (
     <div>
       <p style={{ margin: 0, fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         {label}
       </p>
-      <p style={{ margin: '4px 0 0', fontSize: '18px', color: 'var(--text-primary)', fontWeight: 600 }}>
-        {value}
+      <p style={{ margin: '4px 0 0', fontSize: money ? '13px' : '18px', color: 'var(--text-primary)', fontWeight: 600 }}>
+        {display}
       </p>
     </div>
   );
@@ -364,8 +369,9 @@ export default function HomePage() {
         className="chips-scroll"
         style={{
           display: 'flex',
+          flexWrap: 'nowrap',
           gap: '6px',
-          padding: '12px 20px 0',
+          padding: '12px 20px 12px 20px',
           overflowX: 'auto',
           WebkitOverflowScrolling: 'touch',
           scrollbarWidth: 'none',

@@ -131,7 +131,48 @@ const INPUT_FONT_STYLE: React.CSSProperties = {
   fontFamily: 'var(--font)',
   fontWeight: 400,
   letterSpacing: 'normal',
-  lineHeight: 1.4,
+  lineHeight: '22px',
+};
+
+const INPUT_CONTAINER_STYLE: React.CSSProperties = {
+  position: 'relative',
+  flex: 1,
+  minWidth: 0,
+  height: '46px',
+  overflow: 'hidden',
+};
+
+const HIGHLIGHT_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  pointerEvents: 'none',
+  zIndex: 1,
+  padding: '12px 10px',
+  ...INPUT_FONT_STYLE,
+  whiteSpace: 'nowrap',
+  overflowX: 'auto',
+  overflowY: 'hidden',
+  msOverflowStyle: 'none',
+  scrollbarWidth: 'none',
+};
+
+const REAL_INPUT_STYLE: React.CSSProperties = {
+  position: 'relative',
+  zIndex: 2,
+  width: '100%',
+  height: '100%',
+  background: 'transparent',
+  border: 'none',
+  padding: '12px 10px',
+  outline: 'none',
+  color: 'transparent',
+  caretColor: 'var(--text-primary)',
+  ...INPUT_FONT_STYLE,
+  whiteSpace: 'nowrap',
+  overflowX: 'auto',
+  overflowY: 'hidden',
+  msOverflowStyle: 'none',
+  scrollbarWidth: 'none',
 };
 
 export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalInputProps) {
@@ -143,9 +184,19 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isIOS, setIsIOS] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+  const submittingRef = useRef(false);
 
   const tokens = useMemo(() => tokenizeInput(text), [text]);
+
+  useEffect(() => {
+    const ua = navigator.userAgent
+    const ios = /iPad|iPhone|iPod/.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    setIsIOS(ios)
+  }, [])
 
   useEffect(() => {
     const preview = previewInput(text);
@@ -165,7 +216,8 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || saving) return;
+    if (!text.trim() || saving || submittingRef.current) return;
+    submittingRef.current = true;
 
     setSaving(true);
     setError(null);
@@ -190,6 +242,7 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
       setError('error_al_guardar');
     } finally {
       setSaving(false);
+      submittingRef.current = false;
     }
   };
 
@@ -212,21 +265,13 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
           }}
         >
           {/* Layered input container */}
-          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+          <div style={INPUT_CONTAINER_STYLE}>
             {/* Layer 1 — highlight */}
+            {!isIOS && (
             <div
+              ref={highlightRef}
               aria-hidden="true"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                pointerEvents: 'none',
-                zIndex: 1,
-                padding: '12px 10px',
-                ...INPUT_FONT_STYLE,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                overflow: 'hidden',
-              }}
+              style={HIGHLIGHT_STYLE}
             >
               {tokens.map((t, i) => (
                 <span key={i} style={TOKEN_STYLES[t.type]}>
@@ -234,6 +279,7 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
                 </span>
               ))}
             </div>
+            )}
 
             {/* Layer 2 — real input */}
             <input
@@ -241,22 +287,19 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
+              onScroll={(e) => {
+                if (highlightRef.current) {
+                  highlightRef.current.scrollLeft = e.currentTarget.scrollLeft;
+                }
+              }}
               placeholder={
                 text.length === 0 && weatherHint
                   ? `${weatherHint}... o escribe cualquier pendiente`
                   : '¿Qué pendiente tienes?'
               }
               style={{
-                position: 'relative',
-                zIndex: 2,
-                width: '100%',
-                background: 'transparent',
-                border: 'none',
-                padding: '12px 10px',
-                outline: 'none',
-                color: 'transparent',
-                caretColor: 'var(--text-primary)',
-                ...INPUT_FONT_STYLE,
+                ...REAL_INPUT_STYLE,
+                color: isIOS ? 'var(--text-primary)' : 'transparent',
               }}
               aria-label="Nueva entrada"
             />

@@ -1,5 +1,6 @@
 import type { TimelineEntry } from '@/types';
 import { formatLocalDateKey, addDays } from '@/lib/date';
+import { computePriorityScore } from '@/core/priority/priority-score';
 
 export interface TimelineGroup {
   label: string;
@@ -66,43 +67,27 @@ function compareEntries(
   b: TimelineEntry,
   pinnedIds: Set<string>,
 ): number {
-  // 1. Done last
-  if (a.done !== b.done) return a.done ? 1 : -1;
-
-  // 2. Pinned first
+  // 1. Pinned always first (strong user intent)
   const aPinned = pinnedIds.has(a.localId);
   const bPinned = pinnedIds.has(b.localId);
   if (aPinned !== bPinned) return aPinned ? -1 : 1;
 
-  // 3. Urgent > important > normal
-  const aPriority = getTimelinePriority(a);
-  const bPriority = getTimelinePriority(b);
-  if (aPriority !== bPriority) return bPriority - aPriority;
+  // 2. Score desc (encodes done=-200, urgency, date proximity, type boosts)
+  const scoreDiff = computePriorityScore(b, pinnedIds) - computePriorityScore(a, pinnedIds);
+  if (scoreDiff !== 0) return scoreDiff;
 
-  // 4. Date ascending (earlier first)
-  if (a.date && b.date) {
-    const dateCompare = a.date.localeCompare(b.date);
-    if (dateCompare !== 0) return dateCompare;
-  } else if (a.date) {
-    return -1;
-  } else if (b.date) {
-    return 1;
-  }
-
-  // 5. Time ascending
+  // 3. Time ascending as tiebreaker within same day
   if (a.time && b.time) {
-    const timeCompare = a.time.localeCompare(b.time);
-    if (timeCompare !== 0) return timeCompare;
+    const tc = a.time.localeCompare(b.time);
+    if (tc !== 0) return tc;
   } else if (a.time) {
     return -1;
   } else if (b.time) {
     return 1;
   }
 
-  // 6. Fallback: updatedAt desc (most recently touched first)
-  const aTime = (a.updatedAt ?? a.createdAt).getTime();
-  const bTime = (b.updatedAt ?? b.createdAt).getTime();
-  return bTime - aTime;
+  // 4. createdAt desc
+  return b.createdAt.getTime() - a.createdAt.getTime();
 }
 
 export function buildTimeline(

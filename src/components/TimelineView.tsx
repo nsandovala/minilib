@@ -724,7 +724,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction }: Timelin
                   {whenLabel}
                 </span>
               )}
-              {amountLabel && (
+              {amountLabel && !isShoppingList && (
                 <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#c9a882' }}>
                   {amountLabel}
                 </span>

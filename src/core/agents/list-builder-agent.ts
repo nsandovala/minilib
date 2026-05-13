@@ -15,12 +15,15 @@ export interface ShoppingListBuildResult {
 
 const INTRO_PATTERNS = [
   /\bcomprar\s+en\s+(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
+  /\bcompras\s+(?:para\s+)?(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
   /\blista\s+(?:de\s+)?(?:compras|supermercado|super)\b/gi,
+  /\blista\s+supermercado\b/gi,
   /\bnecesito\s+(?:comprar|traer)\b/gi,
   /\bpasar\s+al\s+(?:super(?:mercado)?|mercado)\s+por\b/gi,
   /\btraer\s+(?:de\s+)?(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
   /\bir\s+a\s+(?:comprar|el\s+super|el\s+mercado)\b/gi,
   /\bcomprar\b/gi,
+  /\bcompras\b/gi,
   /\bsupermercado\b/gi,
   /\ben\s+el\s+super\b/gi,
   /\blista\s+de\b/gi,
@@ -300,6 +303,14 @@ function classifyItemCategory(label: string): string {
   return 'otros';
 }
 
+// Split "papas tomates" → ["papas", "tomates"] when both are individually known products.
+function splitAdjacentKnown(part: string): string[] {
+  const words = part.split(/\s+/);
+  if (words.length < 2 || words.length > 5) return [part];
+  if (words.every((w) => classifyItemCategory(w) !== 'otros')) return words;
+  return [part];
+}
+
 /* ──────────────────────────────────────────
    Tag detection (semantic groups)
    ────────────────────────────────────────── */
@@ -357,9 +368,10 @@ export function buildShoppingList(input: string): ShoppingListBuildResult | null
   const cleaned = cleanShoppingIntro(raw);
 
   const parts = cleaned
-    .split(/[,;]/)
+    .split(/[,;]|\s+y\s+/i)
     .map(normalizeListItem)
-    .filter(Boolean);
+    .filter(Boolean)
+    .flatMap(splitAdjacentKnown);
 
   const storeFromRaw = detectStoreType(raw);
   const hasStoreKeyword = storeFromRaw !== 'otro';
