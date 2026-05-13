@@ -271,6 +271,13 @@
     z-index: 1;
   }
 
+  /* Responsive chip: Calendario → icon-only on narrow screens */
+  @media (max-width: 430px) {
+    .chip-label-calendario {
+      display: none;
+    }
+  }
+
   /* Ensure cards have enough contrast against space bg */
   .glass-card {
     background: rgba(255, 248, 240, 0.055);

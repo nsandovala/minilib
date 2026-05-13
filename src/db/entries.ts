@@ -3,46 +3,89 @@ import type { ParsedEntry, TimelineEntry, ShoppingMetadata } from '@/types';
 import { createChecklistItems, softDeleteChecklistItemsForEntry } from '@/db/checklist';
 import { processInput } from '@/core/agents/orchestrator';
 
+/* ─── Safe UUID generator — polyfill for older browsers ──────────────────── */
+
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback: RFC4122 v4
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/* ─── Safe logging — only in development ─────────────────────────────────── */
+
+function devLog(...args: unknown[]): void {
+  if (process.env.NODE_ENV === 'development') {
+    // eslint-disable-next-line no-console
+    console.log('[Liev]', ...args);
+  }
+}
+
+function devError(...args: unknown[]): void {
+  if (process.env.NODE_ENV === 'development') {
+    // eslint-disable-next-line no-console
+    console.error('[Liev]', ...args);
+  }
+}
+
 type CreateEntryInput = Pick<TimelineEntry, 'text' | 'title' | 'type'> &
   Partial<Pick<TimelineEntry, 'date' | 'time' | 'tags' | 'done' | 'amount' | 'checklistItems' | 'listItems' | 'listGroups' | 'detectedTags' | 'metadata'>>;
 
 export async function createEntry(data: CreateEntryInput): Promise<number> {
-  // Dedup: return the existing id if an identical entry was created in the last 5 s
-  const fiveSecondsAgo = new Date(Date.now() - 5000);
-  const dup = await db.entries
-    .where('createdAt').above(fiveSecondsAgo)
-    .filter((e) => e.type === data.type && e.text === data.text)
-    .first();
-  if (dup?.id !== undefined) return dup.id as number;
+  try {
+    // Dedup: return the existing id if an identical entry was created in the last 5 s
+    const fiveSecondsAgo = new Date(Date.now() - 5000);
+    const dup = await db.entries
+      .where('createdAt').above(fiveSecondsAgo)
+      .filter((e) => e.type === data.type && e.text === data.text)
+      .first();
+    if (dup?.id !== undefined) return dup.id as number;
 
-  const now = new Date();
-  const localId = crypto.randomUUID();
-  const id = await db.entries.add({
-    localId,
-    text:     data.text,
-    type:     data.type,
-    title:    data.title,
-    date:     data.date ?? null,
-    time:     data.time ?? null,
-    tags:     data.tags ?? [data.type],
-    done:     data.done ?? false,
-    amount:   data.amount ?? null,
-    checklistItems: data.checklistItems ?? null,
-    listItems: data.listItems ?? null,
-    listGroups: data.listGroups ?? null,
-    detectedTags: data.detectedTags ?? null,
-    metadata: data.metadata ?? null,
-    createdAt: now,
-    updatedAt: now,
-    syncedAt:  null,
-  });
+    const now = new Date();
+    const localId = generateUUID();
+    const payload = {
+      localId,
+      text:     data.text,
+      type:     data.type,
+      title:    data.title,
+      date:     data.date ?? null,
+      time:     data.time ?? null,
+      tags:     data.tags ?? [data.type],
+      done:     data.done ?? false,
+      amount:   data.amount ?? null,
+      checklistItems: data.checklistItems ?? null,
+      listItems: data.listItems ?? null,
+      listGroups: data.listGroups ?? null,
+      detectedTags: data.detectedTags ?? null,
+      metadata: data.metadata ?? null,
+      createdAt: now,
+      updatedAt: now,
+      syncedAt:  null,
+    };
 
-  // Seed structured checklist items for shopping lists (backwards compat)
-  if (data.type === 'shopping_list' && data.checklistItems?.length) {
-    await createChecklistItems(localId, data.checklistItems);
+    devLog('createEntry payload', payload);
+    const id = await db.entries.add(payload);
+
+    // Seed structured checklist items for shopping lists (backwards compat)
+    if (data.type === 'shopping_list' && data.checklistItems?.length) {
+      try {
+        await createChecklistItems(localId, data.checklistItems);
+      } catch (checklistErr) {
+        devError('checklist seed failed', checklistErr);
+        // non-blocking: main entry already saved
+      }
+    }
+
+    return id as number;
+  } catch (err) {
+    devError('createEntry failed', err);
+    throw err;
   }
-
-  return id as number;
 }
 
 export async function addEntry(parsed: ParsedEntry): Promise<number> {

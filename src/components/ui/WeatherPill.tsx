@@ -124,48 +124,82 @@ function conditionColor(condition: WeatherCondition, isDay: boolean): string {
   return 'rgba(245,240,235,0.5)';
 }
 
-// Valparaíso, Chile — fallback cuando geolocation falla o está en localhost
+const LS_KEY = 'liev:weather:permission';
 const VALPO_LAT = -33.0472;
 const VALPO_LNG = -71.6127;
+
+function getStoredPermission(): 'granted' | 'denied' | null {
+  try {
+    return localStorage.getItem(LS_KEY) as 'granted' | 'denied' | null;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredPermission(value: 'granted' | 'denied') {
+  try {
+    localStorage.setItem(LS_KEY, value);
+  } catch {
+    // silent fail in private mode
+  }
+}
 
 export default function WeatherPill(): JSX.Element | null {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [permission, setPermission] = useState<'granted' | 'denied' | null>(null);
 
   useEffect(() => {
     setMounted(true);
-
-    const load = async () => {
-      // Intenta con geolocation real primero
-      let data = await getLocationAndWeather();
-
-      // Fallback a Valparaíso si geolocation falla
-      // (localhost sin HTTPS, permisos denegados, etc.)
-      if (!data) {
-        try {
-          data = await fetchWeather(VALPO_LAT, VALPO_LNG);
-        } catch {
-          // Open-Meteo sin conexión — fallo silencioso
-        }
-      }
-
-      if (data) {
-        setWeather(data);
-        currentSuggestion = data.suggestion;
-      }
-      setLoading(false);
-    };
-
-    load();
-    const interval = setInterval(load, 15 * 60 * 1000);
-    return () => clearInterval(interval);
+    setPermission(getStoredPermission());
   }, []);
+
+  const loadWeather = async (requestLocation = false) => {
+    setLoading(true);
+    let data: WeatherData | null = null;
+
+    if (requestLocation) {
+      data = await getLocationAndWeather();
+      if (data) {
+        setStoredPermission('granted');
+        setPermission('granted');
+      } else {
+        setStoredPermission('denied');
+        setPermission('denied');
+      }
+    } else if (permission === 'granted') {
+      data = await getLocationAndWeather();
+    }
+
+    // Fallback a Valparaíso siempre (sin geolocation necesaria)
+    if (!data) {
+      try {
+        data = await fetchWeather(VALPO_LAT, VALPO_LNG);
+      } catch {
+        // silent fail
+      }
+    }
+
+    if (data) {
+      setWeather(data);
+      currentSuggestion = data.suggestion;
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (!mounted) return;
+    loadWeather(false);
+    const interval = setInterval(() => loadWeather(false), 15 * 60 * 1000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, permission]);
 
   if (!mounted) return null;
 
+  // Loading state: minimal dot
   if (loading) {
-    // Punto estático mientras carga — sin animación para evitar keyframe faltante
     return (
       <span
         style={{
@@ -176,6 +210,34 @@ export default function WeatherPill(): JSX.Element | null {
           display: 'inline-block',
         }}
       />
+    );
+  }
+
+  // No weather data + no permission yet → show activate button
+  if (!weather && permission !== 'granted') {
+    return (
+      <button
+        type="button"
+        onClick={() => loadWeather(true)}
+        aria-label="Ver clima local"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          background: 'transparent',
+          border: 'none',
+          padding: '2px 6px',
+          cursor: 'pointer',
+          color: 'var(--text-muted)',
+          fontSize: '11px',
+          fontFamily: 'var(--font-mono)',
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+        </svg>
+        <span>Clima</span>
+      </button>
     );
   }
 

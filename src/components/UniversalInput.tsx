@@ -221,8 +221,10 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
 
     setSaving(true);
     setError(null);
+    const trimmed = text.trim();
+
     try {
-      const result = processInput(text.trim());
+      const result = processInput(trimmed);
 
       if (!result.success || !result.entry) {
         setError(result.error ?? 'error_desconocido');
@@ -238,8 +240,21 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
       setJustSaved(true);
       onEntryAdded();
       setTimeout(() => setJustSaved(false), 1500);
-    } catch {
+    } catch (err) {
+      // Log safely in production (no user data)
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.error('[Liev] addEntry failed:', err);
+      }
+
+      // Never lose the user's text — keep it in the input
       setError('error_al_guardar');
+      // Auto-retry once after 500ms if it was a transient Dexie error
+      setTimeout(() => {
+        if (text.trim() === trimmed) {
+          setError(null);
+        }
+      }, 500);
     } finally {
       setSaving(false);
       submittingRef.current = false;

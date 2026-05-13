@@ -382,6 +382,7 @@ export default function HomePage() {
           <button
             key={chip.id}
             type="button"
+            aria-label={chip.label}
             className={`chip${activeChip === chip.id ? ' active' : ''}`}
             onClick={() => toggleChip(chip.id)}
             style={{
@@ -392,7 +393,9 @@ export default function HomePage() {
             }}
           >
             {chip.id === 'calendario' && <CalendarIcon />}
-            {chip.label}
+            <span className={chip.id === 'calendario' ? 'chip-label-calendario' : ''}>
+              {chip.label}
+            </span>
           </button>
         ))}
       </div>
