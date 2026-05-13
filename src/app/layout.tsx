@@ -6,6 +6,8 @@ import BottomNav from '@/components/ui/BottomNav';
 import NotificationBanner from '@/components/ui/NotificationBanner';
 import AppInit from '@/components/ui/AppInit';
 
+const PWA_ICON_VERSION = '20260513';
+
 const SpaceBackground = dynamic(
   () => import('@/components/ui/SpaceBackground'),
   { ssr: false }
@@ -19,21 +21,27 @@ const DebugPanel = dynamic(
 export const metadata: Metadata = {
   title: 'Liev',
   description: 'Tu libreta viva contextual, siempre contigo',
-  manifest: '/manifest.json',
+  manifest: `/manifest.json?v=${PWA_ICON_VERSION}`,
   icons: {
     icon: [
-      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { url: `/favicon.ico?v=${PWA_ICON_VERSION}`, type: 'image/x-icon' },
+      { url: `/icons/icon-192-v${PWA_ICON_VERSION}.png`, sizes: '192x192', type: 'image/png' },
+      { url: `/icons/icon-512-v${PWA_ICON_VERSION}.png`, sizes: '512x512', type: 'image/png' },
     ],
+    shortcut: [`/favicon.ico?v=${PWA_ICON_VERSION}`],
     apple: [
-      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+      {
+        url: `/icons/apple-touch-icon-v${PWA_ICON_VERSION}.png`,
+        sizes: '180x180',
+        type: 'image/png',
+      },
     ],
   },
   appleWebApp: {
     capable: true,
     title: 'Liev',
     statusBarStyle: 'black-translucent',
-    startupImage: '/apple-touch-icon.png',
+    startupImage: `/icons/apple-touch-icon-v${PWA_ICON_VERSION}.png`,
   },
 };
 

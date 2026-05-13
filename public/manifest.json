@@ -8,21 +8,22 @@
   "background_color": "#050508",
   "theme_color": "#050508",
   "description": "Tu libreta viva contextual, siempre contigo",
+  "id": "/?pwa-icon=20260513",
   "icons": [
     {
-      "src": "/apple-touch-icon.png",
+      "src": "/icons/apple-touch-icon-v20260513.png",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192.png",
+      "src": "/icons/icon-192-v20260513.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/icon-512-v20260513.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
