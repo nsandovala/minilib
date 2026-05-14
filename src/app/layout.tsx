@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 import { ClerkProvider } from '@clerk/nextjs';
 import './globals.css';
 import BottomNav from '@/components/ui/BottomNav';
@@ -11,6 +11,8 @@ const PWA_ICON_VERSION = '20260513';
 const DEFAULT_APP_URL = 'https://liev-ten.vercel.app';
 const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || DEFAULT_APP_URL;
 
+export const dynamic = 'force-dynamic';
+
 function getMetadataBase(url: string): URL {
   try {
     return new URL(url);
@@ -19,7 +21,7 @@ function getMetadataBase(url: string): URL {
   }
 }
 
-const SpaceBackground = dynamic(
+const SpaceBackground = nextDynamic(
   () => import('@/components/ui/SpaceBackground'),
   { ssr: false }
 );

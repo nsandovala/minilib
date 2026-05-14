@@ -3,6 +3,8 @@ import { getEntriesForUser, getChecklistItemsForUser } from '@/db/cloud/queries'
 import type { CloudEntry, CloudChecklistItem } from '@/db/cloud/schema';
 import type { EntryPayload, ChecklistItemPayload } from '@/lib/sync/types';
 
+export const dynamic = 'force-dynamic';
+
 function cloudEntryToPayload(row: CloudEntry): EntryPayload {
   let tags: string[] = [];
   try {
@@ -65,6 +67,9 @@ export async function GET(): Promise<Response> {
     });
   } catch (err) {
     console.error('[pull] 500 —', err instanceof Error ? err.message : 'unknown error');
-    return Response.json({ error: 'Internal error' }, { status: 500 });
+    return Response.json(
+      { error: err instanceof Error ? err.message : 'Internal error' },
+      { status: 500 },
+    );
   }
 }

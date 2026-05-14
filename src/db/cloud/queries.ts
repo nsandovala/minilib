@@ -1,11 +1,12 @@
 // Server-only — never import this from client components.
 import { eq, isNull, and, sql } from 'drizzle-orm';
-import { cloudDb } from './client';
+import { getCloudDb } from './client';
 import { entries, checklistItems } from './schema';
 import type { CloudEntry, CloudEntryInsert, CloudChecklistItem, CloudChecklistItemInsert } from './schema';
 
 export async function upsertEntries(payload: CloudEntryInsert[]): Promise<void> {
   if (!payload.length) return;
+  const cloudDb = getCloudDb();
   await cloudDb
     .insert(entries)
     .values(payload)
@@ -29,6 +30,7 @@ export async function upsertEntries(payload: CloudEntryInsert[]): Promise<void> 
 
 export async function upsertChecklistItems(payload: CloudChecklistItemInsert[]): Promise<void> {
   if (!payload.length) return;
+  const cloudDb = getCloudDb();
   await cloudDb
     .insert(checklistItems)
     .values(payload)
@@ -46,6 +48,7 @@ export async function upsertChecklistItems(payload: CloudChecklistItemInsert[]):
 }
 
 export async function getEntriesForUser(userId: string): Promise<CloudEntry[]> {
+  const cloudDb = getCloudDb();
   return cloudDb
     .select()
     .from(entries)
@@ -54,6 +57,7 @@ export async function getEntriesForUser(userId: string): Promise<CloudEntry[]> {
 
 export async function getChecklistItemsForUser(userId: string): Promise<CloudChecklistItem[]> {
   // Returns all items including soft-deleted so deletions propagate to other devices.
+  const cloudDb = getCloudDb();
   return cloudDb
     .select()
     .from(checklistItems)

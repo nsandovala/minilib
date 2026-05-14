@@ -3,6 +3,8 @@ import { upsertEntries, upsertChecklistItems } from '@/db/cloud/queries';
 import type { EntryPayload, ChecklistItemPayload } from '@/lib/sync/types';
 import type { CloudEntryInsert, CloudChecklistItemInsert } from '@/db/cloud/schema';
 
+export const dynamic = 'force-dynamic';
+
 function entryToInsert(userId: string, p: EntryPayload): CloudEntryInsert {
   return {
     id:        p.localId,
@@ -69,7 +71,10 @@ export async function POST(req: Request): Promise<Response> {
     }
   } catch (err) {
     console.error('[push] 500 —', err instanceof Error ? err.message : 'unknown error');
-    return Response.json({ error: 'Internal error' }, { status: 500 });
+    return Response.json(
+      { error: err instanceof Error ? err.message : 'Internal error' },
+      { status: 500 },
+    );
   }
 
   return Response.json({ ok: true, entries: entryRows.length, checklistItems: itemRows.length });

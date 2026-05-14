@@ -3,6 +3,30 @@ import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from './schema';
 
-const sql = neon(process.env.DATABASE_URL!);
+type CloudDb = ReturnType<typeof drizzle<typeof schema>>;
 
-export const cloudDb = drizzle(sql, { schema });
+let cloudDb: CloudDb | null = null;
+
+function getDatabaseUrl(): string {
+  const databaseUrl =
+    process.env.DATABASE_URL ??
+    process.env.POSTGRES_URL ??
+    process.env.NEON_DATABASE_URL;
+
+  if (!databaseUrl) {
+    throw new Error(
+      'Missing database connection string. Set DATABASE_URL, POSTGRES_URL, or NEON_DATABASE_URL.',
+    );
+  }
+
+  return databaseUrl;
+}
+
+export function getCloudDb(): CloudDb {
+  if (cloudDb) return cloudDb;
+
+  const sql = neon(getDatabaseUrl());
+  cloudDb = drizzle(sql, { schema });
+
+  return cloudDb;
+}
