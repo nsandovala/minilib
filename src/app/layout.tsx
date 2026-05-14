@@ -5,22 +5,29 @@ import './globals.css';
 import BottomNav from '@/components/ui/BottomNav';
 import NotificationBanner from '@/components/ui/NotificationBanner';
 import AppInit from '@/components/ui/AppInit';
+import DebugPanelGate from '@/components/ui/DebugPanelGate';
 
 const PWA_ICON_VERSION = '20260513';
+const DEFAULT_APP_URL = 'https://liev-ten.vercel.app';
+const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || DEFAULT_APP_URL;
+
+function getMetadataBase(url: string): URL {
+  try {
+    return new URL(url);
+  } catch {
+    return new URL(DEFAULT_APP_URL);
+  }
+}
 
 const SpaceBackground = dynamic(
   () => import('@/components/ui/SpaceBackground'),
   { ssr: false }
 );
 
-const DebugPanel = dynamic(
-  () => import('@/components/ui/DebugPanel'),
-  { ssr: false }
-);
-
 export const metadata: Metadata = {
   title: 'Liev',
   description: 'Tu libreta viva contextual, siempre contigo',
+  metadataBase: getMetadataBase(appUrl),
   manifest: `/manifest.json?v=${PWA_ICON_VERSION}`,
   icons: {
     icon: [
@@ -59,9 +66,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
-      <html lang="es">
-        <body>
+    <html lang="es">
+      <body>
+        <ClerkProvider>
           <SpaceBackground />
           <div aria-hidden="true">
             <div className="bg-grain" />
@@ -72,9 +79,9 @@ export default function RootLayout({
           <NotificationBanner />
           <BottomNav />
           <AppInit />
-          {process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_SHOW_DEBUG === 'true' ? <DebugPanel /> : null}
-        </body>
-      </html>
-    </ClerkProvider>
+          <DebugPanelGate />
+        </ClerkProvider>
+      </body>
+    </html>
   );
 }
