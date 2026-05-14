@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 
 const navItems = [
   {
@@ -68,6 +69,13 @@ const navItems = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const { isLoaded, isSignedIn } = useAuth();
+
+  if (!isLoaded) return null;
+
+  if (!isSignedIn && (pathname === '/' || pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up'))) {
+    return null;
+  }
 
   return (
     <nav

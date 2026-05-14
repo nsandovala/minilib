@@ -55,8 +55,8 @@ export default function DebugPanel() {
 
   useEffect(() => {
     const isDev = process.env.NODE_ENV === 'development';
-    const hasFlag = window.location.search.includes('debug=1');
-    setVisible(isDev || hasFlag);
+    const showDebug = process.env.NEXT_PUBLIC_SHOW_DEBUG === 'true';
+    setVisible(isDev && showDebug);
   }, []);
 
   const runChecks = useCallback(async () => {
