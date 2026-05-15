@@ -1,5 +1,6 @@
 import type { ShoppingItem, ShoppingProgress } from '@/types';
 import { normalizeCLP } from '@/lib/money';
+import { hasExplicitListIntent, shouldBuildShoppingList } from './parser-rules';
 
 export interface ShoppingListBuildResult {
   listKind: 'shopping';
@@ -366,9 +367,10 @@ function buildProgress(items: ShoppingItem[]): ShoppingProgress {
 export function buildShoppingList(input: string): ShoppingListBuildResult | null {
   const raw = input.trim();
   const cleaned = cleanShoppingIntro(raw);
+  const explicitListIntent = hasExplicitListIntent(raw);
 
   const parts = cleaned
-    .split(/[,;]|\s+y\s+/i)
+    .split(/[,;/]|\s+y\s+|\n+/i)
     .map(normalizeListItem)
     .filter(Boolean)
     .flatMap(splitAdjacentKnown);
@@ -386,8 +388,12 @@ export function buildShoppingList(input: string): ShoppingListBuildResult | null
   }
 
   const hasKnownCategory = itemLabels.some((l) => classifyItemCategory(l) !== 'otros');
-  if (itemLabels.length < 1) return null;
-  if (itemLabels.length < 2 && !hasStoreKeyword && !hasKnownCategory) return null;
+  if (!shouldBuildShoppingList({
+    itemCount: itemLabels.length,
+    explicitListIntent,
+    hasStoreKeyword,
+    hasKnownCategory,
+  })) return null;
 
   const storeType = storeFromRaw !== 'otro' ? storeFromRaw : detectStoreType(cleaned);
 

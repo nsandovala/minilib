@@ -6,6 +6,7 @@ import type { TimelineEntry, ChecklistItem, EntryType, ShoppingMetadata } from '
 import { toggleEntryDone, deleteEntry, updateEntry, reparseAndUpdateEntry, toggleShoppingItem } from '@/db/entries';
 import { toggleChecklistItem } from '@/db/checklist';
 import { db } from '@/db';
+import { recordBelongsToActiveUser } from '@/lib/local-user';
 import { buildTimeline } from '@/core/agents/timeline-agent';
 import {
   formatRelativeDate,
@@ -327,7 +328,11 @@ function DetailLine({ label, value }: { label: string; value: string }) {
 // ─── Main TimelineView ────────────────────────────────────────────────────────
 
 export default function TimelineView({ entries, onRefresh }: TimelineViewProps) {
-  const allChecklistItems = useLiveQuery(() => db.checklist_items.toArray(), [], []) ?? [];
+  const allChecklistItems = useLiveQuery(
+    async () => (await db.checklist_items.toArray()).filter((item) => recordBelongsToActiveUser(item.ownerUserId)),
+    [],
+    [],
+  ) ?? [];
 
   const checklistByEntry = new Map<string, ChecklistItem[]>();
   for (const item of allChecklistItems) {

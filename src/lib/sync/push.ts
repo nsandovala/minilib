@@ -3,6 +3,8 @@ import { db } from '@/db';
 import type { TimelineEntry, ChecklistItem } from '@/types';
 import type { EntryPayload, ChecklistItemPayload } from './types';
 import { encodeEntryTagsForSync } from '@/lib/entries';
+import { getActiveLocalUserId, recordBelongsToUser } from '@/lib/local-user';
+import { dedupeChecklistPayloads, dedupeEntryPayloads } from './dedupe';
 
 function entryToPayload(entry: TimelineEntry): EntryPayload {
   return {
@@ -47,13 +49,16 @@ function itemNeedsSync(item: ChecklistItem): boolean {
 }
 
 export async function push(): Promise<void> {
+  const userId = getActiveLocalUserId();
+  if (!userId) return;
+
   const [allEntries, allItems] = await Promise.all([
     db.entries.toArray(),
     db.checklist_items.toArray(),
   ]);
 
-  const dirtyEntries = allEntries.filter(entryNeedsSync);
-  const dirtyItems   = allItems.filter(itemNeedsSync);
+  const dirtyEntries = allEntries.filter((entry) => recordBelongsToUser(entry.ownerUserId, userId) && entryNeedsSync(entry));
+  const dirtyItems   = allItems.filter((item) => recordBelongsToUser(item.ownerUserId, userId) && itemNeedsSync(item));
 
   if (!dirtyEntries.length && !dirtyItems.length) return;
 
@@ -61,8 +66,8 @@ export async function push(): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      entries:       dirtyEntries.map(entryToPayload),
-      checklistItems: dirtyItems.map(checklistItemToPayload),
+      entries: dedupeEntryPayloads(userId, dirtyEntries.map(entryToPayload)),
+      checklistItems: dedupeChecklistPayloads(userId, dirtyItems.map(checklistItemToPayload)),
     }),
   });
 

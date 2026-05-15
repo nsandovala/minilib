@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@clerk/nextjs';
+import { recordBelongsToUser } from '@/lib/local-user';
 
 interface DebugState {
   localCount: number | null;
@@ -68,8 +69,9 @@ export default function DebugPanel() {
     if (idb) {
       try {
         const { db } = await import('@/db');
-        localCount = await db.entries.count();
-        unsyncedCount = await db.entries.filter((e: { syncedAt?: Date | null }) => !e.syncedAt).count();
+        const entries = await db.entries.toArray();
+        localCount = entries.filter((entry) => recordBelongsToUser(entry.ownerUserId, userId ?? null)).length;
+        unsyncedCount = entries.filter((entry) => !entry.syncedAt && recordBelongsToUser(entry.ownerUserId, userId ?? null)).length;
       } catch { /* silent */ }
     }
 

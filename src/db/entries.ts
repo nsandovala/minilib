@@ -2,6 +2,8 @@ import { db } from '@/db';
 import type { ParsedEntry, TimelineEntry, ShoppingMetadata } from '@/types';
 import { createChecklistItems, softDeleteChecklistItemsForEntry } from '@/db/checklist';
 import { processInput } from '@/core/agents/orchestrator';
+import { buildEntryFingerprint } from '@/lib/sync/dedupe';
+import { getActiveLocalUserId, recordBelongsToActiveUser, resolveOwnerUserId } from '@/lib/local-user';
 
 /* ─── Safe UUID generator — polyfill for older browsers ──────────────────── */
 
@@ -38,22 +40,40 @@ type CreateEntryInput = Pick<TimelineEntry, 'text' | 'title' | 'type'> &
 
 export async function createEntry(data: CreateEntryInput): Promise<number> {
   try {
+    const ownerUserId = resolveOwnerUserId();
+
     // Dedup: non-fatal — return existing id if identical entry created in the last 5 s
     try {
       const fiveSecondsAgo = new Date(Date.now() - 5000);
       const dup = await db.entries
         .where('createdAt').above(fiveSecondsAgo)
-        .filter((e) => e.type === data.type && e.text === data.text)
+        .filter((e) => recordBelongsToActiveUser(e.ownerUserId) && e.type === data.type && e.text === data.text)
         .first();
       if (dup?.id !== undefined) return dup.id as number;
     } catch {
       // IDB index unavailable — skip dedup, proceed with insert
     }
 
+    const existingEntries = await db.entries.toArray();
+    const targetFingerprint = buildEntryFingerprint(ownerUserId ?? 'local', {
+      type: data.type,
+      title: data.title,
+      text: data.text,
+      date: data.date ?? null,
+      amount: data.amount ?? null,
+      createdAt: new Date(),
+    });
+    const semanticDup = existingEntries.find((entry) =>
+      recordBelongsToActiveUser(entry.ownerUserId) &&
+      buildEntryFingerprint(ownerUserId ?? 'local', entry) === targetFingerprint,
+    );
+    if (semanticDup?.id !== undefined) return semanticDup.id;
+
     const now = new Date();
     const localId = generateUUID();
     const payload = {
       localId,
+      ownerUserId,
       text:     data.text,
       type:     data.type,
       title:    data.title,
@@ -115,7 +135,11 @@ export async function addEntry(parsed: ParsedEntry): Promise<number> {
 }
 
 export async function getEntries(): Promise<TimelineEntry[]> {
-  return db.entries.orderBy('createdAt').reverse().toArray();
+  const userId = getActiveLocalUserId();
+  if (!userId) return [];
+
+  const entries = await db.entries.orderBy('createdAt').reverse().toArray();
+  return entries.filter((entry) => recordBelongsToActiveUser(entry.ownerUserId));
 }
 
 /* ─── Finance bridge: shopping list → payment ─────────────────────────────── */
@@ -134,6 +158,7 @@ async function ensureShoppingListPayment(entry: TimelineEntry): Promise<void> {
   const allEntries = await db.entries.toArray();
   const existing = allEntries.find(
     (e) =>
+      recordBelongsToActiveUser(e.ownerUserId) &&
       e.type === 'payment' &&
       e.tags.some((t) => t === `from_shopping:${entry.localId}`),
   );

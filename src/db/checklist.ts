@@ -1,11 +1,13 @@
 import { db } from '@/db';
 import type { ChecklistItem } from '@/types';
+import { buildChecklistFingerprint } from '@/lib/sync/dedupe';
+import { recordBelongsToActiveUser, resolveOwnerUserId } from '@/lib/local-user';
 
 export async function getChecklistItemsForEntry(localEntryId: string): Promise<ChecklistItem[]> {
   return db.checklist_items
     .where('localEntryId')
     .equals(localEntryId)
-    .filter((item) => !item.deletedAt)
+    .filter((item) => recordBelongsToActiveUser(item.ownerUserId) && !item.deletedAt)
     .sortBy('sortOrder');
 }
 
@@ -16,9 +18,11 @@ export async function createChecklistItems(
 ): Promise<void> {
   if (!labels.length) return;
   const now = new Date();
+  const ownerUserId = resolveOwnerUserId();
   const items: Array<Omit<ChecklistItem, 'id'>> = labels.map((label, index) => ({
     localId: crypto.randomUUID(),
     localEntryId,
+    ownerUserId,
     label,
     checked: false,
     category,
@@ -60,7 +64,15 @@ export async function softDeleteChecklistItemsForEntry(localEntryId: string): Pr
 export async function upsertChecklistItemFromSync(
   item: Omit<ChecklistItem, 'id'>,
 ): Promise<void> {
-  const existing = await db.checklist_items.where('localId').equals(item.localId).first();
+  const allItems = await db.checklist_items.toArray();
+  const existing = allItems.find((candidate) =>
+    recordBelongsToActiveUser(candidate.ownerUserId) &&
+    (
+      candidate.localId === item.localId ||
+      buildChecklistFingerprint(item.ownerUserId ?? 'local', candidate) ===
+        buildChecklistFingerprint(item.ownerUserId ?? 'local', item)
+    ),
+  );
 
   if (!existing) {
     await db.checklist_items.add(item as ChecklistItem);
@@ -73,6 +85,7 @@ export async function upsertChecklistItemFromSync(
       label:     item.label,
       checked:   item.checked,
       category:  item.category,
+      ownerUserId: item.ownerUserId ?? existing.ownerUserId ?? null,
       sortOrder: item.sortOrder,
       updatedAt: item.updatedAt,
       deletedAt: item.deletedAt ?? null,

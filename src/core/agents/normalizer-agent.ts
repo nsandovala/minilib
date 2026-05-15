@@ -1,5 +1,6 @@
 import type { EntryType, ParsedEntry, ShoppingMetadata } from '@/types';
 import type { ExtractedTokens } from './parser-agent';
+import { resolveListEntryType } from './parser-rules';
 
 const TYPE_PATTERNS: Record<EntryType, RegExp[]> = {
   payment: [
@@ -29,9 +30,7 @@ export function detectType(tokens: ExtractedTokens): EntryType {
   const lower = tokens.rawText.toLowerCase();
 
   if (tokens.isListLike) {
-    if (tokens.detectedTags.includes('mascotas')) return 'pet';
-    // Any structured grocery/household list becomes a shopping_list
-    return 'shopping_list';
+    return resolveListEntryType(tokens.detectedTags);
   }
 
   const priorityOrder: EntryType[] = [
@@ -55,6 +54,7 @@ export function detectType(tokens: ExtractedTokens): EntryType {
 
 function buildTitle(tokens: ExtractedTokens, type: EntryType): string {
   if (tokens.isListLike) {
+    if (type === 'health') return 'Compra de farmacia';
     if (tokens.detectedTags.includes('mascotas')) return 'Lista para mascotas';
     if (tokens.detectedTags.includes('farmacia')) return 'Lista de farmacia';
     if (tokens.detectedTags.includes('aseo hogar') || tokens.detectedTags.includes('casa')) {

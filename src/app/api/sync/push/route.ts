@@ -1,41 +1,58 @@
 import { auth } from '@clerk/nextjs/server';
-import { upsertEntries, upsertChecklistItems } from '@/db/cloud/queries';
+import {
+  getChecklistItemsForUser,
+  getEntriesForUser,
+  upsertChecklistItems,
+  upsertEntries,
+} from '@/db/cloud/queries';
 import type { EntryPayload, ChecklistItemPayload } from '@/lib/sync/types';
 import type { CloudEntryInsert, CloudChecklistItemInsert } from '@/db/cloud/schema';
+import {
+  buildChecklistFingerprint,
+  buildEntryFingerprint,
+  dedupeChecklistPayloads,
+  dedupeEntryPayloads,
+} from '@/lib/sync/dedupe';
+import { extractLocalId, scopeCloudId } from '@/db/cloud/identity';
 
 export const dynamic = 'force-dynamic';
 
-function entryToInsert(userId: string, p: EntryPayload): CloudEntryInsert {
+function entryToInsert(userId: string, cloudId: string, payload: EntryPayload): CloudEntryInsert {
   return {
-    id:        p.localId,
+    id:        cloudId,
     userId,
-    text:      p.text,
-    type:      p.type,
-    title:     p.title,
-    date:      p.date ?? null,
-    entryTime: p.entryTime ?? null,
-    tags:      JSON.stringify(p.tags),
-    done:      p.done,
-    amount:    p.amount ?? null,
-    metadata:  p.metadata ?? null,
-    createdAt: new Date(p.createdAt),
-    updatedAt: new Date(p.updatedAt),
+    text:      payload.text,
+    type:      payload.type,
+    title:     payload.title,
+    date:      payload.date ?? null,
+    entryTime: payload.entryTime ?? null,
+    tags:      JSON.stringify(payload.tags),
+    done:      payload.done,
+    amount:    payload.amount ?? null,
+    metadata:  payload.metadata ?? null,
+    createdAt: new Date(payload.createdAt),
+    updatedAt: new Date(payload.updatedAt),
     deletedAt: null,
   };
 }
 
-function checklistItemToInsert(userId: string, p: ChecklistItemPayload): CloudChecklistItemInsert {
+function checklistItemToInsert(
+  userId: string,
+  cloudId: string,
+  scopedEntryId: string,
+  payload: ChecklistItemPayload,
+): CloudChecklistItemInsert {
   return {
-    id:        p.localId,
-    entryId:   p.localEntryId,
+    id:        cloudId,
+    entryId:   scopedEntryId,
     userId,
-    label:     p.label,
-    checked:   p.checked,
-    category:  p.category ?? null,
-    sortOrder: p.sortOrder ?? 0,
-    createdAt: new Date(p.createdAt),
-    updatedAt: new Date(p.updatedAt),
-    deletedAt: p.deletedAt ? new Date(p.deletedAt) : null,
+    label:     payload.label,
+    checked:   payload.checked,
+    category:  payload.category ?? null,
+    sortOrder: payload.sortOrder ?? 0,
+    createdAt: new Date(payload.createdAt),
+    updatedAt: new Date(payload.updatedAt),
+    deletedAt: payload.deletedAt ? new Date(payload.deletedAt) : null,
   };
 }
 
@@ -57,18 +74,101 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: 'entries must be an array' }, { status: 400 });
   }
 
-  const entryRows = body.entries.map((p) => entryToInsert(userId, p));
-  const itemRows  = (body.checklistItems ?? []).map((p) => checklistItemToInsert(userId, p));
-
   try {
+    const [existingEntries, existingItems] = await Promise.all([
+      getEntriesForUser(userId),
+      getChecklistItemsForUser(userId),
+    ]);
+
+    const dedupedEntries = dedupeEntryPayloads(userId, body.entries);
+    const dedupedItems = dedupeChecklistPayloads(userId, body.checklistItems ?? []);
+
+    const existingEntryByLocalId = new Map<string, string>();
+    const existingEntryByFingerprint = new Map<string, string>();
+    for (const row of existingEntries) {
+      const localId = extractLocalId(userId, row.id);
+      existingEntryByLocalId.set(localId, row.id);
+      existingEntryByFingerprint.set(buildEntryFingerprint(userId, {
+        type: row.type,
+        title: row.title,
+        text: row.text,
+        date: row.date,
+        amount: row.amount,
+        createdAt: row.createdAt,
+      }), row.id);
+    }
+
+    const canonicalEntryIdByIncomingLocalId = new Map<string, string>();
+    const entryRows = dedupedEntries.map((payload) => {
+      const fingerprint = buildEntryFingerprint(userId, {
+        type: payload.type,
+        title: payload.title,
+        text: payload.text,
+        date: payload.date,
+        amount: payload.amount,
+        createdAt: payload.createdAt,
+      });
+      const canonicalCloudId =
+        existingEntryByLocalId.get(payload.localId) ??
+        existingEntryByFingerprint.get(fingerprint) ??
+        scopeCloudId(userId, payload.localId);
+
+      canonicalEntryIdByIncomingLocalId.set(payload.localId, canonicalCloudId);
+      existingEntryByLocalId.set(payload.localId, canonicalCloudId);
+      existingEntryByFingerprint.set(fingerprint, canonicalCloudId);
+
+      return entryToInsert(userId, canonicalCloudId, payload);
+    });
+
+    const existingItemByLocalId = new Map<string, string>();
+    const existingItemByFingerprint = new Map<string, string>();
+    for (const row of existingItems) {
+      const localId = extractLocalId(userId, row.id);
+      const localEntryId = extractLocalId(userId, row.entryId);
+      existingItemByLocalId.set(localId, row.id);
+      existingItemByFingerprint.set(buildChecklistFingerprint(userId, {
+        localEntryId,
+        label: row.label,
+        sortOrder: row.sortOrder,
+        createdAt: row.createdAt,
+      }), row.id);
+    }
+
+    const itemRows = dedupedItems.map((payload) => {
+      const canonicalEntryCloudId =
+        canonicalEntryIdByIncomingLocalId.get(payload.localEntryId) ??
+        scopeCloudId(userId, payload.localEntryId);
+      const canonicalEntryLocalId = extractLocalId(userId, canonicalEntryCloudId);
+      const fingerprint = buildChecklistFingerprint(userId, {
+        localEntryId: canonicalEntryLocalId,
+        label: payload.label,
+        sortOrder: payload.sortOrder,
+        createdAt: payload.createdAt,
+      });
+      const canonicalCloudId =
+        existingItemByLocalId.get(payload.localId) ??
+        existingItemByFingerprint.get(fingerprint) ??
+        scopeCloudId(userId, payload.localId);
+
+      existingItemByLocalId.set(payload.localId, canonicalCloudId);
+      existingItemByFingerprint.set(fingerprint, canonicalCloudId);
+
+      return checklistItemToInsert(userId, canonicalCloudId, canonicalEntryCloudId, {
+        ...payload,
+        localEntryId: canonicalEntryLocalId,
+      });
+    });
+
     await Promise.all([
       upsertEntries(entryRows),
       upsertChecklistItems(itemRows),
     ]);
 
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[push] 200 — entries:${entryRows.length} items:${itemRows.length}`);
+      console.log(`[push] 200 — user:${userId.slice(0, 8)} entries:${entryRows.length} items:${itemRows.length}`);
     }
+
+    return Response.json({ ok: true, entries: entryRows.length, checklistItems: itemRows.length });
   } catch (err) {
     console.error('[push] 500 —', err instanceof Error ? err.message : 'unknown error');
     return Response.json(
@@ -76,6 +176,4 @@ export async function POST(req: Request): Promise<Response> {
       { status: 500 },
     );
   }
-
-  return Response.json({ ok: true, entries: entryRows.length, checklistItems: itemRows.length });
 }

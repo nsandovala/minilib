@@ -164,6 +164,28 @@ export class MiniLibDB extends Dexie {
           if (!('metadata' in entry)) entry['metadata'] = null;
         });
       });
+
+    // v8: scopes local records by Clerk user to avoid cross-user leakage on shared devices
+    this.version(8)
+      .stores({
+        notes: '++id, updatedAt',
+        drawings: '++id, createdAt',
+        medications: '++id, active, name',
+        todos: '++id, done, category, createdAt',
+        appointments: '++id, date, reminded',
+        scheduled_notifications: '++id, notifId, scheduledAt, fired',
+        entries: '++id, &localId, ownerUserId, type, date, done, createdAt, syncedAt',
+        checklist_items: '++id, &localId, ownerUserId, localEntryId, checked, updatedAt, syncedAt',
+      })
+      .upgrade(async (tx) => {
+        await tx.table('entries').toCollection().modify((entry: Record<string, unknown>) => {
+          if (!('ownerUserId' in entry)) entry['ownerUserId'] = null;
+        });
+
+        await tx.table('checklist_items').toCollection().modify((item: Record<string, unknown>) => {
+          if (!('ownerUserId' in item)) item['ownerUserId'] = null;
+        });
+      });
   }
 }
 

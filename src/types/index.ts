@@ -99,6 +99,7 @@ export interface ChecklistItem {
   id?: number;
   localId: string;            // UUID — stable across sync
   localEntryId: string;       // parent entry's localId
+  ownerUserId?: string | null;
   label: string;
   checked: boolean;
   category: string | null;
@@ -127,6 +128,7 @@ export interface ParsedEntry {
 export interface TimelineEntry {
   id?: number;
   localId: string;       // UUID — stable identifier across sync
+  ownerUserId?: string | null;
   text: string;
   type: EntryType;
   title: string;

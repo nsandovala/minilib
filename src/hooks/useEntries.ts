@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db';
 import type { EntryType, TimelineEntry } from '@/types';
+import { recordBelongsToActiveUser } from '@/lib/local-user';
 
 interface UseEntriesOptions {
   types?: EntryType[];
@@ -36,7 +37,7 @@ export function useEntries(options: UseEntriesOptions = {}): TimelineEntry[] {
   return (
     useLiveQuery(async () => {
       const entries = await db.entries.toArray();
-      return filterEntries(sortEntries(entries), options);
+      return filterEntries(sortEntries(entries.filter((entry) => recordBelongsToActiveUser(entry.ownerUserId))), options);
     }, [options.search, options.types?.join('|')], []) ?? []
   );
 }

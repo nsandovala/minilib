@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/db';
+import { recordBelongsToActiveUser } from '@/lib/local-user';
 import { useEntries } from '@/hooks/useEntries';
 import TimelineView from '@/components/TimelineView';
 import { formatCLP } from '@/lib/entries';
@@ -138,7 +139,11 @@ function SummaryCell({
 
 export default function PurchasesPage() {
   const entries    = useEntries();
-  const allItems   = useLiveQuery(() => db.checklist_items.toArray(), [], []) ?? [];
+  const allItems   = useLiveQuery(
+    async () => (await db.checklist_items.toArray()).filter((item) => recordBelongsToActiveUser(item.ownerUserId)),
+    [],
+    [],
+  ) ?? [];
 
   const itemsByEntry = useMemo(() => {
     const map = new Map<string, ChecklistItem[]>();
