@@ -161,30 +161,45 @@ function extractDate(text: string): { date: string | null; cleaned: string } {
 function extractAmount(text: string): { amount: number | null; cleaned: string } {
   const lucasMatch = text.match(/(\d+(?:[.,]\d{3})?)\s*lucas?/i);
   if (lucasMatch) {
+    const cleaned = text
+      .replace(lucasMatch[0], '')
+      .replace(/\$\s*$/, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
     const raw = lucasMatch[1].replace(/[.,]/g, '');
     return {
       amount: parseInt(raw, 10),
-      cleaned: text.replace(lucasMatch[0], '').replace(/\s+/g, ' ').trim(),
+      cleaned,
     };
   }
 
   const kMatch = text.match(/(\d+(?:\.\d+)?)\s*k\b/i);
   if (kMatch) {
+    const cleaned = text
+      .replace(kMatch[0], '')
+      .replace(/\$\s*$/, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
     return {
       amount: Math.round(parseFloat(kMatch[1]) * 1000),
-      cleaned: text.replace(kMatch[0], '').replace(/\s+/g, ' ').trim(),
+      cleaned,
     };
   }
 
   // CLP with dot/comma as thousands separator: "2.900", "$12.500", "220.000"
   const clpMatch = text.match(/\$?\s*(\d{1,3}(?:[.,]\d{3})+)/);
   if (clpMatch) {
+    const cleaned = text
+      .replace(clpMatch[0], '')
+      .replace(/\$\s*$/, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
     const raw = clpMatch[1].replace(/[.,]/g, '');
     const num = parseInt(raw, 10);
     if (num >= 100) {
       return {
         amount: num,
-        cleaned: text.replace(clpMatch[0], '').replace(/\s+/g, ' ').trim(),
+        cleaned,
       };
     }
   }
@@ -192,11 +207,16 @@ function extractAmount(text: string): { amount: number | null; cleaned: string }
   // Bare 3+ digit numbers without separators
   const fullNumberMatch = text.match(/(\d{3,})/);
   if (fullNumberMatch) {
+    const cleaned = text
+      .replace(fullNumberMatch[0], '')
+      .replace(/\$\s*$/, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
     const num = parseInt(fullNumberMatch[1], 10);
     if (num >= 100) {
       return {
         amount: num,
-        cleaned: text.replace(fullNumberMatch[0], '').replace(/\s+/g, ' ').trim(),
+        cleaned,
       };
     }
   }

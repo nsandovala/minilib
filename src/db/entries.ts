@@ -183,6 +183,32 @@ export async function toggleEntryDone(id: number, done: boolean): Promise<void> 
   if (done && entry.type === 'shopping_list') {
     await ensureShoppingListPayment(entry);
   }
+
+  if (done && entry.type === 'payment') {
+    const currentMeta = (entry.metadata as Record<string, unknown>) ?? {};
+    await db.entries.update(id, {
+      metadata: {
+        ...currentMeta,
+        estado: 'pagado',
+        resolvedAt: new Date().toISOString(),
+      },
+      updatedAt: new Date(),
+      syncedAt: null,
+    });
+  }
+
+  if (!done && entry.type === 'payment') {
+    const currentMeta = (entry.metadata as Record<string, unknown>) ?? {};
+    await db.entries.update(id, {
+      metadata: {
+        ...currentMeta,
+        estado: 'pendiente',
+        resolvedAt: null,
+      },
+      updatedAt: new Date(),
+      syncedAt: null,
+    });
+  }
 }
 
 export async function updateEntry(

@@ -18,7 +18,7 @@ import MiniCalendar from '@/components/MiniCalendar';
 import LiveClock from '@/components/ui/LiveClock';
 import WeatherPill from '@/components/ui/WeatherPill';
 import { getLocationAndWeather } from '@/lib/weather';
-import type { TimelineEntry } from '@/types';
+import type { ShoppingMetadata, TimelineEntry } from '@/types';
 
 type ChipFilter = 'all' | 'compra' | 'pago' | 'salud' | 'mascota' | 'casa' | 'calendario';
 
@@ -174,8 +174,13 @@ function DailySummary({ entries }: { entries: TimelineEntry[] }) {
   const todayCount = entries.filter((entry) => entry.date === today && !entry.done).length;
   const pendingPayments = entries.filter((entry) => entry.type === 'payment' && !entry.done).length;
   const shoppingEstimated = entries
-    .filter((entry) => entry.type === 'shopping_list' && !entry.done && typeof entry.amount === 'number')
-    .reduce((sum, entry) => sum + (entry.amount ?? 0), 0);
+    .filter((entry) => entry.type === 'shopping_list' && !entry.done)
+    .reduce((sum, entry) => {
+      const meta = entry.metadata as ShoppingMetadata | undefined;
+      const estimated = meta?.progress?.totalEstimated ?? 0;
+      const fallback = estimated > 0 ? estimated : (entry.amount ?? 0);
+      return sum + fallback;
+    }, 0);
 
   return (
     <div

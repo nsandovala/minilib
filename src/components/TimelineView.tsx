@@ -393,6 +393,13 @@ interface TimelineGroupProps {
 }
 
 function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onAction }: TimelineGroupProps) {
+  const deduped = entries.filter((entry, index, arr) => {
+    if (entry.type !== 'shopping_list') return true;
+    return arr.findIndex(
+      (e) => e.type === 'shopping_list' && e.title === entry.title && e.date === entry.date,
+    ) === index;
+  });
+
   return (
     <section style={{ marginBottom: '18px' }}>
       <h2
@@ -409,7 +416,7 @@ function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onActio
         {label}
       </h2>
       <div style={{ display: 'grid', gap: '8px' }}>
-        {entries.map((entry) => (
+        {deduped.map((entry) => (
           <TimelineItem
             key={entry.localId}
             entry={entry}
