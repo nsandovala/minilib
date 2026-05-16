@@ -536,12 +536,13 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
     }
   };
 
-  const displayType   = getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry);
-  const color         = TYPE_COLORS[entry.type] ?? 'rgba(245,240,235,0.34)';
-  const priority      = getEntryPriority(entry);
-  const whenLabel     = getWhenLabel(entry);
-  const amountLabel   = typeof entry.amount === 'number' ? formatCLP(entry.amount) : '';
-  const detailOriginal = getDetailOriginal(entry);
+  const displayType      = getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry);
+  const calmExplanation  = getAgentForType(entry.type)?.ui.calmExplanation ?? null;
+  const color            = TYPE_COLORS[entry.type] ?? 'rgba(245,240,235,0.34)';
+  const priority         = getEntryPriority(entry);
+  const whenLabel        = getWhenLabel(entry);
+  const amountLabel      = typeof entry.amount === 'number' ? formatCLP(entry.amount) : '';
+  const detailOriginal   = getDetailOriginal(entry);
 
   const isShoppingList = entry.type === 'shopping_list' || isMetadataShopping(entry);
   const isPayment      = entry.type === 'payment';
@@ -907,7 +908,11 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
                   </div>
                 ) : isPayment ? (
                   <>
-                    <DetailLine label="Qué entendí" value={getFinancialDirection(entry) === 'income' ? 'Ingreso registrado' : 'Pago pendiente'} />
+                    <DetailLine label="Liev" value={
+                      getFinancialDirection(entry) === 'income'
+                        ? 'Ingreso registrado'
+                        : (calmExplanation ?? 'Pago pendiente')
+                    } />
                     <DetailLine label="Monto" value={amountLabel} />
                     <DetailLine label="Cuándo" value={whenLabel} />
                     <DetailLine label="Tipo" value={`${getFinancialDirection(entry) === 'income' ? 'ingreso' : 'egreso'} / ${getFinancialCategory(entry)}`} />
@@ -917,18 +922,19 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
                   </>
                 ) : isPetOrHealth ? (
                   <>
-                    <DetailLine label="Qué entendí" value={entry.type === 'pet' ? 'Cuidado de mascota' : 'Cuidado personal'} />
+                    <DetailLine label="Liev" value={calmExplanation ?? (entry.type === 'pet' ? 'Cuidado de mascota' : 'Cuidado personal')} />
                     <DetailLine label="Cuándo" value={whenLabel} />
                     <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
                     <DetailLine label="Detalle original" value={detailOriginal} />
                   </>
                 ) : entry.type === 'note' ? (
                   <>
-                    <DetailLine label="Qué entendí" value="Nota guardada" />
+                    <DetailLine label="Liev" value={calmExplanation ?? 'Nota guardada'} />
                     <DetailLine label="Detalle original" value={detailOriginal} />
                   </>
                 ) : (
                   <>
+                    {calmExplanation && <DetailLine label="Liev" value={calmExplanation} />}
                     <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
                     <DetailLine label="Cuándo" value={whenLabel} />
                     <DetailLine label="Detalle original" value={detailOriginal} />
