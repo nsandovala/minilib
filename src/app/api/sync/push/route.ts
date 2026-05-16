@@ -14,10 +14,16 @@ import {
   dedupeEntryPayloads,
 } from '@/lib/sync/dedupe';
 import { extractLocalId, scopeCloudId } from '@/db/cloud/identity';
+import { buildDedupeKey } from '@/lib/sync/dedupe-key';
 
 export const dynamic = 'force-dynamic';
 
-function entryToInsert(userId: string, cloudId: string, payload: EntryPayload): CloudEntryInsert {
+function entryToInsert(
+  userId: string,
+  cloudId: string,
+  payload: EntryPayload,
+  dedupeKey: string,         // always computed server-side, never trusted from client
+): CloudEntryInsert {
   return {
     id:        cloudId,
     userId,
@@ -30,6 +36,7 @@ function entryToInsert(userId: string, cloudId: string, payload: EntryPayload): 
     done:      payload.done,
     amount:    payload.amount ?? null,
     metadata:  payload.metadata ?? null,
+    dedupeKey,
     createdAt: new Date(payload.createdAt),
     updatedAt: new Date(payload.updatedAt),
     deletedAt: null,
@@ -83,11 +90,15 @@ export async function POST(req: Request): Promise<Response> {
     const dedupedEntries = dedupeEntryPayloads(userId, body.entries);
     const dedupedItems = dedupeChecklistPayloads(userId, body.checklistItems ?? []);
 
-    const existingEntryByLocalId = new Map<string, string>();
+    const existingEntryByLocalId    = new Map<string, string>();
+    const existingEntryByDedupeKey  = new Map<string, string>(); // stable key → cloud id
     const existingEntryByFingerprint = new Map<string, string>();
     for (const row of existingEntries) {
       const localId = extractLocalId(userId, row.id);
       existingEntryByLocalId.set(localId, row.id);
+      if (row.dedupeKey) {
+        existingEntryByDedupeKey.set(row.dedupeKey, row.id);
+      }
       existingEntryByFingerprint.set(buildEntryFingerprint(userId, {
         type: row.type,
         title: row.title,
@@ -100,6 +111,17 @@ export async function POST(req: Request): Promise<Response> {
 
     const canonicalEntryIdByIncomingLocalId = new Map<string, string>();
     const entryRows = dedupedEntries.map((payload) => {
+      // dedupe_key is always computed server-side from Clerk userId — never from client payload
+      const dedupeKey = buildDedupeKey({
+        userId,
+        type:      payload.type,
+        title:     payload.title,
+        text:      payload.text,
+        date:      payload.date ?? null,
+        entryTime: payload.entryTime ?? null,
+        amount:    payload.amount ?? null,
+      });
+
       const fingerprint = buildEntryFingerprint(userId, {
         type: payload.type,
         title: payload.title,
@@ -108,16 +130,20 @@ export async function POST(req: Request): Promise<Response> {
         amount: payload.amount,
         createdAt: payload.createdAt,
       });
+
+      // Resolution order: exact id match → stable dedupe_key → time-bucketed fingerprint → new row
       const canonicalCloudId =
         existingEntryByLocalId.get(payload.localId) ??
+        existingEntryByDedupeKey.get(dedupeKey) ??
         existingEntryByFingerprint.get(fingerprint) ??
         scopeCloudId(userId, payload.localId);
 
       canonicalEntryIdByIncomingLocalId.set(payload.localId, canonicalCloudId);
       existingEntryByLocalId.set(payload.localId, canonicalCloudId);
+      existingEntryByDedupeKey.set(dedupeKey, canonicalCloudId);
       existingEntryByFingerprint.set(fingerprint, canonicalCloudId);
 
-      return entryToInsert(userId, canonicalCloudId, payload);
+      return entryToInsert(userId, canonicalCloudId, payload, dedupeKey);
     });
 
     const existingItemByLocalId = new Map<string, string>();

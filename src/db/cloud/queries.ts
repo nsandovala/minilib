@@ -22,6 +22,8 @@ export async function upsertEntries(payload: CloudEntryInsert[]): Promise<void> 
         done:      sql`EXCLUDED.done`,
         amount:    sql`EXCLUDED.amount`,
         metadata:  sql`EXCLUDED.metadata`,
+        // Backfill dedupe_key if incoming has one; preserve existing key otherwise.
+        dedupeKey: sql`COALESCE(EXCLUDED.dedupe_key, entries.dedupe_key)`,
         updatedAt: sql`EXCLUDED.updated_at`,
         deletedAt: sql`EXCLUDED.deleted_at`,
       },
