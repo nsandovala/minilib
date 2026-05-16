@@ -64,7 +64,8 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
         {top.map((entry) => {
-          const displayType = getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry);
+          const displayType     = getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry);
+          const correctionHint  = getAgentForType(entry.type)?.ui.correctionHint ?? null;
           const title = getEntryDisplayTitle(entry);
           const nextStep = getEntryNextStep(entry);
           const priority = getEntryPriority(entry);
@@ -160,6 +161,19 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
                 }}>
                   {nextStep}
                 </p>
+                {correctionHint && (
+                  <p style={{
+                    margin: '2px 0 0',
+                    fontSize: '10px',
+                    color: 'rgba(245,240,235,0.18)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontStyle: 'italic',
+                  }}>
+                    {correctionHint}
+                  </p>
+                )}
               </div>
 
               <span aria-hidden="true" style={{
