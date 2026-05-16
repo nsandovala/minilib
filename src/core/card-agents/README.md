@@ -77,40 +77,31 @@ getAgentForType(type: string): CardAgentConfig | undefined
 | Field | Where |
 |---|---|
 | `ui.label` | `TimelineView.tsx` type pill · `NextBestAction.tsx` type chip |
+| `ui.calmExplanation` | `TimelineView.tsx` expanded view — "Liev" row, primary source with hardcoded fallback per type |
+| `ui.correctionHint` | `TimelineView.tsx` expanded view — italic footer below detail rows · `NextBestAction.tsx` — italic line below next step |
 | `ui.emptyState.title` | `/notes`, `/payments`, `/pets`, `/health`, `/todos`, `/purchases` pages |
 | `ui.emptyState.body` | Same 6 pages |
 
 ### ⏳ Defined in resolver, not yet consumed downstream
 
-| Field | Status | Next step |
-|---|---|---|
-| `ui.calmExplanation` | Returned by `resolveCardAgent()` but nothing reads it | Wire into expanded card view (`DetailLine` "Qué entendí" blocks in `TimelineView.tsx` ~line 908) — replaces the current hardcoded strings, low effort |
-| `surfaces.primary` / `.secondary` | Computed correctly in `resolveCardAgent()` | No consumer yet; would power cross-surface pinning or smart navigation |
-| `resolveCardAgent()` / `resolveSurfaceForEntry()` | Exported but never called from UI | Ready to use when surface-routing or calm explanation feature lands |
+| Field | Status |
+|---|---|
+| `surfaces.primary` / `.secondary` | Computed correctly in `resolveCardAgent()`, no downstream consumer yet — would power cross-surface pinning or smart navigation |
+| `resolveCardAgent()` / `resolveSurfaceForEntry()` | Exported, not called from UI — ready when surface-routing lands |
 
-### 📋 Config-only documentation (no UI target yet)
+### 📋 Config-only documentation (no UI target planned)
 
 | Field | Note |
 |---|---|
-| `classification.*` | Upstream parser metadata — actual classification happens in `normalizer-agent.ts` |
+| `classification.*` | Upstream parser metadata — actual classification in `normalizer-agent.ts` |
 | `priority.*` | Conceptual docs — actual scoring in `src/core/priority/priority-score.ts` |
-| `ui.correctionHint` | Needs reclassification UI skeleton first (card menu → "Mover a...") |
-| `correction.allowedTargetTypes` | Would populate a "Mover a" dropdown — no UI affordance yet |
 
----
+### 🗺️ Remaining work
 
-## Pending work (agreed scope, not yet implemented)
-
-1. **`ui.calmExplanation` in expanded card view**
-   Wire `resolveCardAgent(entry).calmExplanation` into the `DetailLine` "Qué entendí"
-   row in `TimelineView.tsx`. This replaces the current hardcoded per-type strings
-   (`'Cuidado de mascota'`, `'Pago pendiente'`, `'Nota guardada'`, etc.).
-
-2. **Reclassification UI** (larger feature)
-   - Add a "Mover a…" option in the card action menu
-   - Read `getAgentForType(entry.type).correction.allowedTargetTypes` to populate options
-   - Show `ui.correctionHint` as the contextual explanation
-   - Call `reparseAndUpdateEntry` with user-selected type override
+**Reclassification UI** (larger feature, no skeleton yet)
+- Add a "Mover a…" option in the card action menu
+- Read `getAgentForType(entry.type).correction.allowedTargetTypes` to populate options
+- Call `reparseAndUpdateEntry` with user-selected type override
 
 ---
 
