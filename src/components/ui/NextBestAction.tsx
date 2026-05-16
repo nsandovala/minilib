@@ -11,19 +11,21 @@ import {
   formatRelativeDate,
   isOverdue,
 } from '@/lib/entries';
+import { getAgentForType } from '@/core/card-agents';
 
 interface NextBestActionProps {
   entries: TimelineEntry[];
 }
 
 const TYPE_ACCENT: Record<string, string> = {
-  pago:    '#c9a882',
-  salud:   '#7a9e7e',
-  mascota: '#c9a882',
-  lista:   '#8faa8b',
-  compra:  '#8faa8b',
-  tarea:   'rgba(245,240,235,0.55)',
-  nota:    'rgba(245,240,235,0.34)',
+  payment:       '#c9a882',
+  health:        '#7a9e7e',
+  appointment:   '#7a9e7e',
+  pet:           '#c9a882',
+  shopping_list: '#8faa8b',
+  task:          'rgba(245,240,235,0.55)',
+  reminder:      'rgba(245,240,235,0.55)',
+  note:          'rgba(245,240,235,0.34)',
 };
 
 export default function NextBestAction({ entries }: NextBestActionProps) {
@@ -62,12 +64,12 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
         {top.map((entry) => {
-          const displayType = getEntryDisplayType(entry);
+          const displayType = getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry);
           const title = getEntryDisplayTitle(entry);
           const nextStep = getEntryNextStep(entry);
           const priority = getEntryPriority(entry);
           const overdue = isOverdue(entry);
-          const accent = TYPE_ACCENT[displayType] ?? 'rgba(245,240,235,0.34)';
+          const accent = TYPE_ACCENT[entry.type] ?? 'rgba(245,240,235,0.34)';
           const dateLabel = entry.date ? formatRelativeDate(entry.date) : null;
           const dotColor = priority === 'urgent' ? '#c47070'
             : priority === 'important' ? '#c9a882'
