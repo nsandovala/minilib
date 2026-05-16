@@ -47,8 +47,24 @@ export default function AppInit(): null {
         sync()
       }
       forceSync()
+
+      const interval = setInterval(() => {
+        if (navigator.onLine) sync()
+      }, 60_000)
+
+      return () => clearInterval(interval)
     }
   }, [isLoaded, isSignedIn, userId]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine && isLoaded && isSignedIn) {
+        sync()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [isLoaded, isSignedIn]);
 
   useEffect(() => {
     const pending = getPendingCount(entries);
