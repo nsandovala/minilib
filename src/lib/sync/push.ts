@@ -5,6 +5,7 @@ import type { EntryPayload, ChecklistItemPayload } from './types';
 import { encodeEntryTagsForSync } from '@/lib/entries';
 import { getActiveLocalUserId, recordBelongsToUser } from '@/lib/local-user';
 import { dedupeChecklistPayloads, dedupeEntryPayloads } from './dedupe';
+import { setSyncState } from './state';
 
 function entryToPayload(entry: TimelineEntry): EntryPayload {
   return {
@@ -72,6 +73,8 @@ export async function push(): Promise<void> {
   });
 
   if (!res.ok) return;
+
+  setSyncState({ lastPushAt: new Date().toISOString() });
 
   const now = new Date();
   await Promise.all([

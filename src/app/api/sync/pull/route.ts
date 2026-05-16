@@ -106,13 +106,21 @@ export async function GET(): Promise<Response> {
       dedupedItems.set(fingerprintKey, winner);
     }
 
+    const entries        = Array.from(new Set(dedupedEntries.values()));
+    const checklistItems = Array.from(new Set(dedupedItems.values()));
+    const pulledAt       = new Date().toISOString();
+
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[pull] 200 — user:${userId.slice(0, 8)} entries:${entryRows.length} items:${itemRows.length}`);
+      console.log(`[pull] 200 — user:${userId.slice(0, 8)} entries:${entries.length} items:${checklistItems.length}`);
     }
 
     return Response.json({
-      entries:        Array.from(new Set(dedupedEntries.values())),
-      checklistItems: Array.from(new Set(dedupedItems.values())),
+      ok: true,
+      userId: `${userId.slice(0, 8)}…`,
+      entries,
+      checklistItems,
+      counts: { entries: entries.length, checklistItems: checklistItems.length },
+      pulledAt,
     });
   } catch (err) {
     console.error('[pull] 500 —', err instanceof Error ? err.message : 'unknown error');

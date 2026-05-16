@@ -10,6 +10,7 @@ import {
   dedupeEntryPayloads,
 } from './dedupe';
 import { getActiveLocalUserId, recordBelongsToUser } from '@/lib/local-user';
+import { setSyncState } from './state';
 
 function payloadToEntry(p: EntryPayload): Omit<TimelineEntry, 'id'> {
   const ownerUserId = getActiveLocalUserId();
@@ -63,7 +64,19 @@ export async function pull(): Promise<void> {
   const body = (await res.json()) as {
     entries: EntryPayload[];
     checklistItems?: ChecklistItemPayload[];
+    counts?: { entries: number; checklistItems: number };
+    pulledAt?: string;
   };
+
+  setSyncState({
+    lastPullAt: body.pulledAt ?? new Date().toISOString(),
+    lastPullEntries: body.counts?.entries ?? (body.entries?.length ?? 0),
+    lastPullItems: body.counts?.checklistItems ?? (body.checklistItems?.length ?? 0),
+  });
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[pull] entries:${body.counts?.entries ?? '?'} items:${body.counts?.checklistItems ?? '?'}`);
+  }
 
   const remote = dedupeEntryPayloads(userId, body.entries ?? []);
   const remoteItems = dedupeChecklistPayloads(userId, body.checklistItems ?? []);
