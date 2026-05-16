@@ -14,6 +14,7 @@ import {
   getEntryNextStep,
   isOverdue,
 } from '@/lib/entries';
+import { PAYMENT_AGENT } from '@/core/card-agents';
 
 type Tab = 'all' | 'income' | 'expense';
 type ManualMode = 'income' | 'payment' | 'purchase';
@@ -703,8 +704,13 @@ export default function PaymentsPage() {
       ) : filtered.length === 0 ? (
         <div className="empty-state" style={{ padding: '40px 24px' }}>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Sin resultados{search ? ` para "${search}"` : ''}
+            {search ? `Sin resultados para "${search}"` : PAYMENT_AGENT.ui.emptyState.title}
           </p>
+          {!search && (
+            <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              {PAYMENT_AGENT.ui.emptyState.body}
+            </p>
+          )}
         </div>
       ) : (
         <div style={{ margin: '12px 20px 0' }}>

@@ -8,6 +8,7 @@ import { useEntries } from '@/hooks/useEntries';
 import TimelineView from '@/components/TimelineView';
 import { formatCLP } from '@/lib/entries';
 import type { TimelineEntry, ChecklistItem, ShoppingMetadata } from '@/types';
+import { SHOPPING_AGENT } from '@/core/card-agents';
 
 function getShoppingLists(entries: TimelineEntry[]): TimelineEntry[] {
   return entries.filter((e) => e.type === 'shopping_list');
@@ -187,9 +188,9 @@ export default function PurchasesPage() {
 
       {allPurchases.length === 0 ? (
         <div className="empty-state" style={{ margin: '0 20px' }}>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Sin compras registradas</p>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{SHOPPING_AGENT.ui.emptyState.title}</p>
           <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
-            Prueba: &quot;leche, huevos, pan, mantequilla&quot;
+            {SHOPPING_AGENT.ui.emptyState.body}
           </p>
         </div>
       ) : (

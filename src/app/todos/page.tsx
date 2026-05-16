@@ -2,6 +2,7 @@
 
 import FilteredEntriesPage from '@/components/entries/FilteredEntriesPage';
 import { getPaymentEntries } from '@/core/queries/entry-queries';
+import { TASK_AGENT } from '@/core/card-agents';
 
 export default function TodosPage() {
   return (
@@ -10,8 +11,8 @@ export default function TodosPage() {
       description="Vista legacy conectada al nuevo filtro de pagos del MVP."
       filter={getPaymentEntries}
       searchPlaceholder="Buscar pagos..."
-      emptyLabel="No hay pagos registrados"
-      emptyHint="Escribe cuentas o servicios desde el inicio para verlos aquí."
+      emptyLabel={TASK_AGENT.ui.emptyState.title}
+      emptyHint={TASK_AGENT.ui.emptyState.body}
     />
   );
 }

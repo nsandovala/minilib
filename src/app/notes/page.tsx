@@ -7,6 +7,7 @@ import { getNoteEntries, queryEntries } from '@/core/queries/entry-queries';
 import type { TimelineEntry } from '@/types';
 import NoteCard from '@/components/notes/NoteCard';
 import NoteEditor from '@/components/notes/NoteEditor';
+import { NOTE_AGENT } from '@/core/card-agents';
 
 export default function NotesPage() {
   const [search, setSearch] = useState('');
@@ -93,9 +94,9 @@ export default function NotesPage() {
         )}
         {notes.length === 0 && !search && (
           <div className="empty-state">
-            <p>Tu libreta está vacía</p>
+            <p>{NOTE_AGENT.ui.emptyState.title}</p>
             <p style={{ marginTop: '8px', fontSize: '13px' }}>
-              Toca + para crear tu primera nota
+              {NOTE_AGENT.ui.emptyState.body}
             </p>
           </div>
         )}
