@@ -8,6 +8,7 @@ import { toggleChecklistItem } from '@/db/checklist';
 import { db } from '@/db';
 import { recordBelongsToActiveUser } from '@/lib/local-user';
 import { groupEntriesForCognitiveTimeline, getMicrocopy, type CognitiveGroupKey } from '@/core/agents/timeline-agent';
+import { getAgentForType } from '@/core/card-agents';
 import {
   formatRelativeDate,
   formatCLP,
@@ -535,7 +536,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
     }
   };
 
-  const displayType   = getEntryDisplayType(entry);
+  const displayType   = getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry);
   const color         = TYPE_COLORS[entry.type] ?? 'rgba(245,240,235,0.34)';
   const priority      = getEntryPriority(entry);
   const whenLabel     = getWhenLabel(entry);
