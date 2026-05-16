@@ -1,6 +1,12 @@
 import type { EntryType, ParsedEntry, ShoppingMetadata } from '@/types';
 import type { ExtractedTokens } from './parser-agent';
-import { resolveListEntryType } from './parser-rules';
+import {
+  resolveListEntryType,
+  isLongFormNote,
+  hasPetAction,
+  hasShoppingIntent,
+  hasPaymentIntent,
+} from './parser-rules';
 
 const TYPE_PATTERNS: Record<EntryType, RegExp[]> = {
   payment: [
@@ -26,30 +32,78 @@ const TYPE_PATTERNS: Record<EntryType, RegExp[]> = {
   shopping_list: [],
 };
 
-export function detectType(tokens: ExtractedTokens): EntryType {
-  const lower = tokens.rawText.toLowerCase();
+export interface ClassificationResult {
+  type: EntryType;
+  confidence: number;
+  reasons: string[];
+}
 
+/**
+ * Classify text with confidence score.
+ * confidence < 0.75 → caller should default to 'note'.
+ * source='notes' raises the override threshold to 0.85.
+ */
+export function classifyWithConfidence(tokens: ExtractedTokens): ClassificationResult {
+  const text = tokens.rawText;
+  const lower = text.toLowerCase();
+
+  // Guard: long-form / structured text always → note
+  if (isLongFormNote(text)) {
+    return { type: 'note', confidence: 0.97, reasons: ['long-form-text'] };
+  }
+
+  // Shopping / pet list — only when there is actual shopping intent
   if (tokens.isListLike) {
-    return resolveListEntryType(tokens.detectedTags);
-  }
-
-  const priorityOrder: EntryType[] = [
-    'payment',
-    'pet',
-    'health',
-    'appointment',
-    'reminder',
-    'task',
-  ];
-
-  for (const type of priorityOrder) {
-    const patterns = TYPE_PATTERNS[type];
-    for (const pattern of patterns) {
-      if (pattern.test(lower)) return type;
+    if (hasShoppingIntent(text)) {
+      const listType = resolveListEntryType(tokens.detectedTags);
+      // Mascotas tag alone is not enough; require a concrete pet action in the items
+      if (listType === 'pet' && !hasPetAction(text)) {
+        return { type: 'shopping_list', confidence: 0.80, reasons: ['list-mascotas-no-action'] };
+      }
+      return { type: listType, confidence: 0.87, reasons: ['shopping-intent', 'list-like'] };
     }
+    // List-like structure without shopping intent → not a shopping list
+    return { type: 'note', confidence: 0.78, reasons: ['list-no-shopping-intent'] };
   }
 
-  return 'note';
+  // Payment — requires both a keyword AND explicit financial intent
+  if (TYPE_PATTERNS.payment.some((p) => p.test(lower)) && hasPaymentIntent(text)) {
+    return { type: 'payment', confidence: 0.87, reasons: ['payment-intent'] };
+  }
+
+  // Pet — concrete care action required, keyword alone is not sufficient
+  if (hasPetAction(text)) {
+    return { type: 'pet', confidence: 0.87, reasons: ['pet-action'] };
+  }
+
+  // Health
+  if (TYPE_PATTERNS.health.some((p) => p.test(lower))) {
+    return { type: 'health', confidence: 0.82, reasons: ['health-keywords'] };
+  }
+
+  // Appointment
+  if (TYPE_PATTERNS.appointment.some((p) => p.test(lower))) {
+    return { type: 'appointment', confidence: 0.82, reasons: ['appointment-keywords'] };
+  }
+
+  // Reminder
+  if (TYPE_PATTERNS.reminder.some((p) => p.test(lower))) {
+    return { type: 'reminder', confidence: 0.77, reasons: ['reminder-keywords'] };
+  }
+
+  // Task
+  if (TYPE_PATTERNS.task.some((p) => p.test(lower))) {
+    return { type: 'task', confidence: 0.75, reasons: ['task-keywords'] };
+  }
+
+  return { type: 'note', confidence: 0.92, reasons: ['no-specific-type'] };
+}
+
+export function detectType(tokens: ExtractedTokens, source?: string): EntryType {
+  const { type, confidence } = classifyWithConfidence(tokens);
+  // From /notes, require higher confidence to override to a non-note type
+  const threshold = source === 'notes' ? 0.85 : 0.75;
+  return confidence >= threshold ? type : 'note';
 }
 
 function buildTitle(tokens: ExtractedTokens, type: EntryType): string {
@@ -63,12 +117,19 @@ function buildTitle(tokens: ExtractedTokens, type: EntryType): string {
     return 'Lista de compras';
   }
 
-  // Use cleanedText: date/time/amount are already stripped, so the verb stays intact.
-  // e.g. "comprar cilantro mañana" → cleanedText = "comprar cilantro" → "Comprar cilantro"
   const base = tokens.cleanedText.trim() || tokens.rawText.trim();
   if (!base) return tokens.rawText.trim();
 
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // For long-form notes, extract a concise title from the first line
+  if (type === 'note' && base.length > 80) {
+    const firstLine = base.split('\n')[0]?.trim() ?? '';
+    if (firstLine.length >= 5) {
+      return cap(firstLine.slice(0, 75).trimEnd()) + (firstLine.length > 75 ? '…' : '');
+    }
+    return cap(base.slice(0, 60).trimEnd()) + '…';
+  }
 
   if (type === 'shopping_list') {
     return cap(base);
@@ -108,14 +169,15 @@ function buildShoppingMetadata(tokens: ExtractedTokens): ShoppingMetadata | unde
   };
 }
 
-export function normalizeEntry(tokens: ExtractedTokens): ParsedEntry {
-  const type = detectType(tokens);
+export function normalizeEntry(tokens: ExtractedTokens, source?: string): ParsedEntry {
+  const classification = classifyWithConfidence(tokens);
+  const threshold = source === 'notes' ? 0.85 : 0.75;
+  const type = classification.confidence >= threshold ? classification.type : 'note';
+
   const title = buildTitle(tokens, type);
   const tags = Array.from(new Set([...buildTags(tokens.rawText, type), ...tokens.detectedTags]));
   const metadata = buildShoppingMetadata(tokens);
 
-  // For shopping lists, use total estimated as the entry-level amount
-  // instead of the first extracted number (which may be an item price).
   const shoppingTotal =
     metadata && metadata.listKind === 'shopping' && metadata.progress.totalEstimated > 0
       ? metadata.progress.totalEstimated
@@ -134,5 +196,7 @@ export function normalizeEntry(tokens: ExtractedTokens): ParsedEntry {
     listGroups: tokens.listGroups.length ? tokens.listGroups : undefined,
     detectedTags: tokens.detectedTags.length ? tokens.detectedTags : undefined,
     metadata,
+    confidence: classification.confidence,
+    reasons: classification.reasons,
   };
 }

@@ -8,6 +8,7 @@ import type { EntryType } from '@/types';
 interface UniversalInputProps {
   onEntryAdded: () => void;
   weatherHint?: string | null;
+  source?: string;
 }
 
 const TYPE_COLORS: Record<EntryType, string> = {
@@ -175,7 +176,7 @@ const REAL_INPUT_STYLE: React.CSSProperties = {
   scrollbarWidth: 'none',
 };
 
-export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalInputProps) {
+export default function UniversalInput({ onEntryAdded, weatherHint, source }: UniversalInputProps) {
   const [text, setText] = useState('');
   const [previewType, setPreviewType] = useState<EntryType | null>(null);
   const [previewDate, setPreviewDate] = useState<string | null>(null);
@@ -183,6 +184,7 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
   const [previewAmount, setPreviewAmount] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  const [savedType, setSavedType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isIOS, setIsIOS] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null);
@@ -199,7 +201,7 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
   }, [])
 
   useEffect(() => {
-    const preview = previewInput(text);
+    const preview = previewInput(text, { source });
     if (preview) {
       setPreviewType(preview.type);
       setPreviewDate(preview.date);
@@ -224,7 +226,7 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
     const trimmed = text.trim();
 
     try {
-      const result = processInput(trimmed);
+      const result = processInput(trimmed, { source });
 
       if (!result.success || !result.entry) {
         setError(result.error ?? 'error_desconocido');
@@ -232,6 +234,7 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
       }
 
       await addEntry(result.entry);
+      setSavedType(TYPE_LABELS[result.entry.type] ?? result.entry.type);
       setText('');
       setPreviewType(null);
       setPreviewDate(null);
@@ -239,7 +242,7 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
       setPreviewAmount(null);
       setJustSaved(true);
       onEntryAdded();
-      setTimeout(() => setJustSaved(false), 1500);
+      setTimeout(() => { setJustSaved(false); setSavedType(null); }, 2000);
     } catch (err) {
       // Log safely in production (no user data)
       if (process.env.NODE_ENV === 'development') {
@@ -369,17 +372,41 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
         </div>
       </form>
 
-      <p
-        style={{
+      {justSaved && savedType ? (
+        <div style={{
+          marginTop: '8px',
+          paddingLeft: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          animation: 'slide-down 0.18s ease-out',
+        }}>
+          <span style={{
+            width: '5px',
+            height: '5px',
+            borderRadius: '50%',
+            background: 'rgba(122,158,126,0.8)',
+            flexShrink: 0,
+          }} />
+          <span style={{
+            fontSize: '11px',
+            color: 'rgba(122,158,126,0.75)',
+            fontWeight: 500,
+          }}>
+            guardado como {savedType}
+          </span>
+        </div>
+      ) : (
+        <p style={{
           marginTop: '8px',
           paddingLeft: '4px',
           fontSize: '11px',
           color: 'var(--text-muted)',
           letterSpacing: '0.01em',
-        }}
-      >
-        Pagos, compras, salud, hogar, mascotas...
-      </p>
+        }}>
+          Pagos, compras, salud, hogar, mascotas...
+        </p>
+      )}
 
       {error && (
         <div
@@ -461,7 +488,7 @@ export default function UniversalInput({ onEntryAdded, weatherHint }: UniversalI
 function formatError(code: string): string {
   const messages: Record<string, string> = {
     empty_input: 'Escribe algo primero',
-    input_too_long: 'Demasiado largo (máx 500 caracteres)',
+    input_too_long: 'Demasiado largo (máx 10.000 caracteres)',
     unsafe_content: 'Contenido no permitido',
     input_too_short: 'Muy corto',
     error_al_guardar: 'No se pudo guardar',

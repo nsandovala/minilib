@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TimelineEntry, ChecklistItem, EntryType, ShoppingMetadata } from '@/types';
 import { toggleEntryDone, deleteEntry, updateEntry, reparseAndUpdateEntry, toggleShoppingItem } from '@/db/entries';
 import { toggleChecklistItem } from '@/db/checklist';
 import { db } from '@/db';
 import { recordBelongsToActiveUser } from '@/lib/local-user';
-import { buildTimeline } from '@/core/agents/timeline-agent';
+import { groupEntriesForCognitiveTimeline, getMicrocopy, type CognitiveGroupKey } from '@/core/agents/timeline-agent';
 import {
   formatRelativeDate,
   formatCLP,
@@ -334,12 +334,15 @@ export default function TimelineView({ entries, onRefresh }: TimelineViewProps) 
     [],
   ) ?? [];
 
-  const checklistByEntry = new Map<string, ChecklistItem[]>();
-  for (const item of allChecklistItems) {
-    const list = checklistByEntry.get(item.localEntryId) ?? [];
-    list.push(item);
-    checklistByEntry.set(item.localEntryId, list);
-  }
+  const checklistByEntry = useMemo(() => {
+    const map = new Map<string, ChecklistItem[]>();
+    for (const item of allChecklistItems) {
+      const list = map.get(item.localEntryId) ?? [];
+      list.push(item);
+      map.set(item.localEntryId, list);
+    }
+    return map;
+  }, [allChecklistItems]);
 
   const handleToggleItem = async (itemId: number, checked: boolean) => {
     await toggleChecklistItem(itemId, checked);
@@ -351,7 +354,10 @@ export default function TimelineView({ entries, onRefresh }: TimelineViewProps) 
     setPinnedIds(new Set(entries.filter(isEntryPinned).map((e) => e.localId)));
   }, [entries]);
 
-  const timeline = buildTimeline(entries, pinnedIds);
+  const timeline = useMemo(
+    () => groupEntriesForCognitiveTimeline(entries, pinnedIds),
+    [entries, pinnedIds],
+  );
 
   if (timeline.isEmpty) {
     return (
@@ -373,6 +379,8 @@ export default function TimelineView({ entries, onRefresh }: TimelineViewProps) 
           key={group.key}
           label={group.label}
           entries={group.entries}
+          groupKey={group.key}
+          collapsedLimit={group.key === 'completed' ? 3 : undefined}
           checklistByEntry={checklistByEntry}
           onToggleItem={handleToggleItem}
           onAction={onRefresh}
@@ -390,9 +398,13 @@ interface TimelineGroupProps {
   checklistByEntry: Map<string, ChecklistItem[]>;
   onToggleItem: (itemId: number, checked: boolean) => Promise<void>;
   onAction: () => void;
+  groupKey?: CognitiveGroupKey;
+  collapsedLimit?: number;
 }
 
-function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onAction }: TimelineGroupProps) {
+function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onAction, groupKey, collapsedLimit }: TimelineGroupProps) {
+  const [showAll, setShowAll] = useState(false);
+
   const deduped = entries.filter((entry, index, arr) => {
     if (entry.type !== 'shopping_list') return true;
     return arr.findIndex(
@@ -400,13 +412,24 @@ function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onActio
     ) === index;
   });
 
+  const isCollapsible = !!collapsedLimit && deduped.length > collapsedLimit;
+  const displayed = isCollapsible && !showAll ? deduped.slice(0, collapsedLimit) : deduped;
+  const hiddenCount = deduped.length - displayed.length;
+
+  const isNow = groupKey === 'now';
+  const isCompleted = groupKey === 'completed';
+
   return (
     <section style={{ marginBottom: '18px' }}>
       <h2
         style={{
           fontSize: '11px',
           fontWeight: 600,
-          color: 'var(--text-muted)',
+          color: isNow
+            ? 'rgba(201,168,130,0.6)'
+            : isCompleted
+            ? 'rgba(245,240,235,0.2)'
+            : 'var(--text-muted)',
           textTransform: 'uppercase',
           letterSpacing: '0.07em',
           margin: '0 0 8px',
@@ -414,18 +437,40 @@ function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onActio
         }}
       >
         {label}
+        {isCompleted && deduped.length > 0 && (
+          <span style={{ fontWeight: 400, marginLeft: '5px' }}>({deduped.length})</span>
+        )}
       </h2>
       <div style={{ display: 'grid', gap: '8px' }}>
-        {deduped.map((entry) => (
+        {displayed.map((entry) => (
           <TimelineItem
             key={entry.localId}
             entry={entry}
             checklistItems={checklistByEntry.get(entry.localId) ?? []}
             onToggleItem={onToggleItem}
             onAction={onAction}
+            groupKey={groupKey}
           />
         ))}
       </div>
+      {isCollapsible && !showAll && hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          style={{
+            marginTop: '6px',
+            paddingLeft: '4px',
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            opacity: 0.6,
+          }}
+        >
+          Ver {hiddenCount} más
+        </button>
+      )}
     </section>
   );
 }
@@ -437,9 +482,10 @@ interface TimelineItemProps {
   checklistItems: ChecklistItem[];
   onToggleItem: (itemId: number, checked: boolean) => Promise<void>;
   onAction: () => void;
+  groupKey?: CognitiveGroupKey;
 }
 
-function TimelineItem({ entry, checklistItems, onToggleItem, onAction }: TimelineItemProps) {
+function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey }: TimelineItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(entry.text);
@@ -517,15 +563,18 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction }: Timelin
       : [...checklistItems].sort((a, b) => Number(a.checked) - Number(b.checked)).slice(0, 3)
     : [];
 
+  const microcopy = groupKey === 'now' ? getMicrocopy(entry) : null;
+
   return (
     <div
+      id={`timeline-entry-${entry.localId}`}
       className="glass-card"
       style={{
         padding: '13px 14px',
         display: 'flex',
         gap: '10px',
         alignItems: 'flex-start',
-        opacity: entry.done ? 0.45 : 1,
+        opacity: entry.done ? 0.42 : 1,
         transition: 'opacity 0.2s ease',
       }}
     >
@@ -639,6 +688,19 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction }: Timelin
                 }}
               />
             </div>
+
+            {/* Microcopy — only in "Ahora" group for pending entries */}
+            {microcopy && (
+              <p style={{
+                margin: '3px 0 0',
+                fontSize: '10px',
+                color: microcopy.startsWith('vencido') ? 'rgba(196,112,112,0.6)' : 'rgba(201,168,130,0.5)',
+                paddingLeft: '0',
+                lineHeight: 1.3,
+              }}>
+                {microcopy}
+              </p>
+            )}
 
             {/* Shopping list: category tag */}
             {isShoppingList && checklistCategory && (

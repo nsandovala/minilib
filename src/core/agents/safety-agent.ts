@@ -4,7 +4,7 @@ export interface SafetyResult {
   error?: string;
 }
 
-const MAX_INPUT_LENGTH = 500;
+const MAX_INPUT_LENGTH = 10_000;
 
 const DANGEROUS_PATTERNS = [
   /<script[\s>]/i,

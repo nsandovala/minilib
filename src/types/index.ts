@@ -123,6 +123,8 @@ export interface ParsedEntry {
   listGroups?: string[];
   detectedTags?: string[];
   metadata?: EntryMetadata;
+  confidence?: number;
+  reasons?: string[];
 }
 
 export interface TimelineEntry {

@@ -1,6 +1,16 @@
 import type { TimelineEntry } from '@/types';
 import { formatLocalDateKey, addDays } from '@/lib/date';
 import { computePriorityScore } from '@/core/priority/priority-score';
+import {
+  groupEntriesForCognitiveTimeline as _groupCognitive,
+  getMicrocopy,
+  type CognitiveGroupKey,
+  type CognitiveGroup,
+  type CognitiveTimelineResult,
+} from '@/core/cognitive/group';
+
+export { getMicrocopy };
+export type { CognitiveGroupKey, CognitiveGroup, CognitiveTimelineResult };
 
 export interface TimelineGroup {
   label: string;
@@ -136,3 +146,14 @@ export function buildTimeline(
 }
 
 export { formatDateLabel };
+
+/**
+ * Production version of the cognitive timeline grouper.
+ * Uses full priority-score sort within each bucket.
+ */
+export function groupEntriesForCognitiveTimeline(
+  entries: TimelineEntry[],
+  pinnedIds: Set<string> = new Set(),
+): CognitiveTimelineResult {
+  return _groupCognitive(entries, (a, b) => compareEntries(a, b, pinnedIds));
+}

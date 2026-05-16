@@ -13,6 +13,7 @@ import {
   getPetEntries,
 } from '@/core/queries/entry-queries';
 import UniversalInput from '@/components/UniversalInput';
+import NextBestAction from '@/components/ui/NextBestAction';
 import TimelineView from '@/components/TimelineView';
 import MiniCalendar from '@/components/MiniCalendar';
 import LiveClock from '@/components/ui/LiveClock';
@@ -820,6 +821,8 @@ export default function HomePage() {
       </div>
 
       <DailySummary entries={entries} />
+
+      {activeChip === 'all' && <NextBestAction entries={entries} />}
 
       <div
         className="chips-scroll"

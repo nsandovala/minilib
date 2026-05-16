@@ -16,7 +16,16 @@ export interface PreviewResult {
   amount: number | null;
 }
 
-export function processInput(rawText: string): ProcessedEntry {
+/**
+ * source: the page/section the entry was created from.
+ * When source='notes', the parser uses a higher confidence threshold
+ * before overriding the type away from 'note'.
+ */
+export interface ProcessOptions {
+  source?: 'notes' | 'pets' | 'payments' | 'purchases' | 'todos' | 'health' | string;
+}
+
+export function processInput(rawText: string, options: ProcessOptions = {}): ProcessedEntry {
   const safety: SafetyResult = safetyCheck(rawText);
 
   if (!safety.valid) {
@@ -24,19 +33,19 @@ export function processInput(rawText: string): ProcessedEntry {
   }
 
   const tokens: ExtractedTokens = parseTokens(safety.text);
-  const entry: ParsedEntry = normalizeEntry(tokens);
+  const entry: ParsedEntry = normalizeEntry(tokens, options.source);
 
   return { success: true, entry };
 }
 
-export function previewInput(rawText: string): PreviewResult | null {
+export function previewInput(rawText: string, options: ProcessOptions = {}): PreviewResult | null {
   if (!rawText || rawText.trim().length <= 2) return null;
 
   const safety: SafetyResult = safetyCheck(rawText);
   if (!safety.valid) return null;
 
   const tokens: ExtractedTokens = parseTokens(safety.text);
-  const type: EntryType = detectType(tokens);
+  const type: EntryType = detectType(tokens, options.source);
 
   return {
     type,
