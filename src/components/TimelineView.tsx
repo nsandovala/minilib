@@ -538,6 +538,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
 
   const displayType      = getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry);
   const calmExplanation  = getAgentForType(entry.type)?.ui.calmExplanation ?? null;
+  const correctionHint   = getAgentForType(entry.type)?.ui.correctionHint ?? null;
   const color            = TYPE_COLORS[entry.type] ?? 'rgba(245,240,235,0.34)';
   const priority         = getEntryPriority(entry);
   const whenLabel        = getWhenLabel(entry);
@@ -939,6 +940,17 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
                     <DetailLine label="Cuándo" value={whenLabel} />
                     <DetailLine label="Detalle original" value={detailOriginal} />
                   </>
+                )}
+                {correctionHint && (
+                  <p style={{
+                    margin: '4px 0 0',
+                    fontSize: '10px',
+                    color: 'rgba(245,240,235,0.22)',
+                    lineHeight: 1.5,
+                    fontStyle: 'italic',
+                  }}>
+                    {correctionHint}
+                  </p>
                 )}
               </div>
             )}
