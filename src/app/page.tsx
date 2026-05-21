@@ -19,7 +19,7 @@ import MiniCalendar from '@/components/MiniCalendar';
 import LiveClock from '@/components/ui/LiveClock';
 import WeatherPill from '@/components/ui/WeatherPill';
 import { getLocationAndWeather } from '@/lib/weather';
-import type { ShoppingMetadata, TimelineEntry } from '@/types';
+import type { TimelineEntry } from '@/types';
 import { isCalendarEntry } from '@/lib/entries';
 
 type ChipFilter = 'all' | 'compra' | 'pago' | 'salud' | 'mascota' | 'casa' | 'calendario';
@@ -173,51 +173,41 @@ function CheckStackIcon(props: SVGProps<SVGSVGElement>) {
 
 function DailySummary({ entries }: { entries: TimelineEntry[] }) {
   const today = new Date().toISOString().split('T')[0];
+  const todayCount = entries.filter((e) => e.date === today && !e.done).length;
+  const pendingTotal = getPendingCount(entries);
+  const pendingPayments = entries.filter((e) => e.type === 'payment' && !e.done).length;
+  const activeShoppingLists = entries.filter((e) => e.type === 'shopping_list' && !e.done).length;
 
-  const todayCount = entries.filter((entry) => entry.date === today && !entry.done).length;
-  const pendingPayments = entries.filter((entry) => entry.type === 'payment' && !entry.done).length;
-  const shoppingEstimated = entries
-    .filter((entry) => entry.type === 'shopping_list' && !entry.done)
-    .reduce((sum, entry) => {
-      const meta = entry.metadata as ShoppingMetadata | undefined;
-      const estimated = meta?.progress?.totalEstimated ?? 0;
-      const fallback = estimated > 0 ? estimated : (entry.amount ?? 0);
-      return sum + fallback;
-    }, 0);
+  const thirdLabel = pendingPayments > 0 ? 'PAGOS PEND.' : activeShoppingLists > 0 ? 'LISTAS' : 'PAGOS PEND.';
+  const thirdValue = pendingPayments > 0 ? pendingPayments : activeShoppingLists > 0 ? activeShoppingLists : 0;
 
   return (
     <div
       className="glass-card"
       style={{
-        margin: '14px 20px 0',
-        padding: '12px 14px',
-        borderRadius: '18px',
+        margin: '12px 20px 0',
+        padding: '10px 14px',
+        borderRadius: '16px',
         display: 'grid',
         gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-        gap: '10px',
+        gap: '0',
       }}
     >
-      <SummaryCell label="Hoy" value={todayCount} />
-      <SummaryCell label="Compras est." value={shoppingEstimated} money />
-      <SummaryCell label="Pagos pend." value={pendingPayments} />
+      <SummaryCell label="HOY" value={todayCount} />
+      <SummaryCell label="PENDIENTES" value={pendingTotal} />
+      <SummaryCell label={thirdLabel} value={thirdValue} />
     </div>
   );
 }
 
-function SummaryCell({ label, value, money }: { label: string; value: number; money?: boolean }) {
-  const display = money
-    ? value > 0
-      ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(value)
-      : '—'
-    : String(value);
-
+function SummaryCell({ label, value }: { label: string; value: number }) {
   return (
-    <div style={{ paddingBottom: 'calc(108px + env(safe-area-inset-bottom, 0px))' }}>
+    <div>
       <p style={{ margin: 0, fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         {label}
       </p>
-      <p style={{ margin: '4px 0 0', fontSize: money ? '13px' : '18px', color: 'var(--text-primary)', fontWeight: 600 }}>
-        {display}
+      <p style={{ margin: '3px 0 0', fontSize: '18px', color: 'var(--text-primary)', fontWeight: 600, lineHeight: 1 }}>
+        {String(value)}
       </p>
     </div>
   );
