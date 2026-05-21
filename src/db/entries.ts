@@ -5,6 +5,10 @@ import { processInput } from '@/core/agents/orchestrator';
 import { buildEntryFingerprint } from '@/lib/sync/dedupe';
 import { getActiveLocalUserId, recordBelongsToActiveUser, resolveOwnerUserId } from '@/lib/local-user';
 
+function getSafeShoppingMetadataItems(meta: ShoppingMetadata | undefined | null): ShoppingMetadata['items'] {
+  return Array.isArray(meta?.items) ? meta.items : [];
+}
+
 /* ─── Safe UUID generator — polyfill for older browsers ──────────────────── */
 
 function generateUUID(): string {
@@ -231,10 +235,11 @@ export async function deleteEntry(id: number): Promise<void> {
 /* ─── Shopping item toggle with total recalculation ───────────────────────── */
 
 function recalcShoppingProgress(meta: ShoppingMetadata): ShoppingMetadata['progress'] {
-  const total = meta.items.length;
-  const checked = meta.items.filter((i) => i.checked).length;
-  const totalEstimated = meta.items.reduce((sum, i) => sum + (i.amount ?? 0), 0);
-  const totalChecked = meta.items.filter((i) => i.checked).reduce((sum, i) => sum + (i.amount ?? 0), 0);
+  const items = getSafeShoppingMetadataItems(meta);
+  const total = items.length;
+  const checked = items.filter((i) => i.checked).length;
+  const totalEstimated = items.reduce((sum, i) => sum + (i.amount ?? 0), 0);
+  const totalChecked = items.filter((i) => i.checked).reduce((sum, i) => sum + (i.amount ?? 0), 0);
   return { total, checked, totalEstimated, totalChecked };
 }
 
@@ -245,7 +250,7 @@ export async function toggleShoppingItem(entryId: number, itemId: string): Promi
   const meta = entry.metadata as ShoppingMetadata | undefined;
   if (!meta || meta.listKind !== 'shopping') return;
 
-  const nextItems = meta.items.map((item) =>
+  const nextItems = getSafeShoppingMetadataItems(meta).map((item) =>
     item.id === itemId ? { ...item, checked: !item.checked } : item,
   );
 
@@ -280,10 +285,10 @@ export async function reparseAndUpdateEntry(id: number, newText: string): Promis
     existingMeta?.listKind === 'shopping'
   ) {
     const existingByLabel = new Map<string, ShoppingMetadata['items'][number]>();
-    for (const item of existingMeta.items) {
+    for (const item of getSafeShoppingMetadataItems(existingMeta)) {
       existingByLabel.set(item.label.toLowerCase().trim(), item);
     }
-    const nextItems = (metadata as ShoppingMetadata).items.map((item) => {
+    const nextItems = getSafeShoppingMetadataItems(metadata as ShoppingMetadata).map((item) => {
       const old = existingByLabel.get(item.label.toLowerCase().trim());
       return {
         ...item,

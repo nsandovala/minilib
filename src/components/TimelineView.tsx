@@ -22,12 +22,24 @@ import {
   getEntryStorageKey,
   isEntryPinned,
   toggleEntryPinned,
+  getShoppingMetadata,
+  getSafeShoppingItems,
   getShoppingStage,
+  getCalendarMetadata as getEntryCalendarMetadata,
+  isCalendarEntry,
 } from '@/lib/entries';
+import { sortCalendarEvents } from '@/core/calendar/event-parser';
+import {
+  getCalendarDisplayCopy,
+  shouldShowCalmExplanation,
+  shouldShowCorrectionHint,
+  shouldShowOriginalText,
+} from '@/core/display/display-rules';
 
 interface TimelineViewProps {
   entries: TimelineEntry[];
   onRefresh: () => void;
+  currentSurface?: string;
 }
 
 const TYPE_COLORS: Record<EntryType, string> = {
@@ -78,11 +90,7 @@ function getChecklistCategory(entry: TimelineEntry): string {
 }
 
 function isMetadataShopping(entry: TimelineEntry): boolean {
-  return (entry.metadata as ShoppingMetadata | undefined)?.listKind === 'shopping';
-}
-
-function getShoppingMetadata(entry: TimelineEntry): ShoppingMetadata | undefined {
-  return entry.metadata as ShoppingMetadata | undefined;
+  return getShoppingMetadata(entry) !== null;
 }
 
 function getPaymentTitle(entry: TimelineEntry): string {
@@ -326,9 +334,62 @@ function DetailLine({ label, value }: { label: string; value: string }) {
   );
 }
 
+function CalendarDetail({ entry }: { entry: TimelineEntry }) {
+  const calendar = getEntryCalendarMetadata(entry);
+  if (!calendar) return null;
+
+  const sortedEvents = sortCalendarEvents(calendar.events);
+  const copy = getCalendarDisplayCopy(entry);
+
+  return (
+    <>
+      <DetailLine label="Liev" value={copy.headline} />
+      <DetailLine label="Cuándo" value={getWhenLabel(entry)} />
+      {sortedEvents.length > 0 ? (
+        <div style={{ display: 'grid', gap: '6px' }}>
+          <p style={{ margin: 0, fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Agenda
+          </p>
+          {sortedEvents.map((event) => (
+            <div
+              key={`${entry.localId}-${event.order}-${event.time}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '8px 10px',
+                borderRadius: '12px',
+                border: '1px solid rgba(255,248,240,0.06)',
+                background: 'rgba(255,248,240,0.025)',
+              }}
+            >
+              <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: '#c9a882', flexShrink: 0 }}>
+                {event.time}
+              </span>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {event.label || `Evento ${event.order}`}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {copy.pendingLabel || copy.prompt ? (
+        <>
+          <DetailLine label="Pendiente" value={copy.pendingLabel ?? ''} />
+          {copy.prompt ? (
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+              {copy.prompt}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+    </>
+  );
+}
+
 // ─── Main TimelineView ────────────────────────────────────────────────────────
 
-export default function TimelineView({ entries, onRefresh }: TimelineViewProps) {
+export default function TimelineView({ entries, onRefresh, currentSurface }: TimelineViewProps) {
   const allChecklistItems = useLiveQuery(
     async () => (await db.checklist_items.toArray()).filter((item) => recordBelongsToActiveUser(item.ownerUserId)),
     [],
@@ -385,6 +446,7 @@ export default function TimelineView({ entries, onRefresh }: TimelineViewProps) 
           checklistByEntry={checklistByEntry}
           onToggleItem={handleToggleItem}
           onAction={onRefresh}
+          currentSurface={currentSurface}
         />
       ))}
     </div>
@@ -401,9 +463,10 @@ interface TimelineGroupProps {
   onAction: () => void;
   groupKey?: CognitiveGroupKey;
   collapsedLimit?: number;
+  currentSurface?: string;
 }
 
-function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onAction, groupKey, collapsedLimit }: TimelineGroupProps) {
+function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onAction, groupKey, collapsedLimit, currentSurface }: TimelineGroupProps) {
   const [showAll, setShowAll] = useState(false);
 
   const deduped = entries.filter((entry, index, arr) => {
@@ -451,6 +514,7 @@ function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onActio
             onToggleItem={onToggleItem}
             onAction={onAction}
             groupKey={groupKey}
+            currentSurface={currentSurface}
           />
         ))}
       </div>
@@ -484,9 +548,10 @@ interface TimelineItemProps {
   onToggleItem: (itemId: number, checked: boolean) => Promise<void>;
   onAction: () => void;
   groupKey?: CognitiveGroupKey;
+  currentSurface?: string;
 }
 
-function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey }: TimelineItemProps) {
+function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey, currentSurface }: TimelineItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(entry.text);
@@ -536,9 +601,10 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
     }
   };
 
-  const displayType      = getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry);
-  const calmExplanation  = getAgentForType(entry.type)?.ui.calmExplanation ?? null;
-  const correctionHint   = getAgentForType(entry.type)?.ui.correctionHint ?? null;
+  const displayType      = isCalendarEntry(entry) ? 'calendario' : (getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry));
+  const agentConfig      = getAgentForType(entry.type);
+  const calmExplanation  = agentConfig?.ui.calmExplanation ?? null;
+  const correctionHint   = agentConfig?.ui.correctionHint ?? null;
   const color            = TYPE_COLORS[entry.type] ?? 'rgba(245,240,235,0.34)';
   const priority         = getEntryPriority(entry);
   const whenLabel        = getWhenLabel(entry);
@@ -548,8 +614,18 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
   const isShoppingList = entry.type === 'shopping_list' || isMetadataShopping(entry);
   const isPayment      = entry.type === 'payment';
   const isPetOrHealth  = entry.type === 'pet' || entry.type === 'health' || entry.type === 'appointment';
+  const isCalendar     = isCalendarEntry(entry);
 
   const metaShopping = getShoppingMetadata(entry);
+  const shoppingItems = useMemo(() => getSafeShoppingItems(entry), [entry]);
+  const sortedMetaShoppingItems = useMemo(
+    () => [...shoppingItems].sort((a, b) => Number(a.checked) - Number(b.checked)),
+    [shoppingItems],
+  );
+  const sortedChecklistItems = useMemo(
+    () => [...checklistItems].sort((a, b) => Number(a.checked) - Number(b.checked)),
+    [checklistItems],
+  );
 
   const title = isPayment
     ? getPaymentTitle(entry)
@@ -562,11 +638,22 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
   // Collapsed checklist preview (first 3 unchecked items)
   const collapsedItems = isShoppingList
     ? metaShopping
-      ? [...metaShopping.items].sort((a, b) => Number(a.checked) - Number(b.checked)).slice(0, 3)
-      : [...checklistItems].sort((a, b) => Number(a.checked) - Number(b.checked)).slice(0, 3)
+      ? sortedMetaShoppingItems.slice(0, 3)
+      : sortedChecklistItems.slice(0, 3)
     : [];
 
   const microcopy = groupKey === 'now' ? getMicrocopy(entry) : null;
+  const primarySurface = agentConfig?.surfaces.primary ?? null;
+  const displayContext = {
+    expanded,
+    currentSurface,
+    primarySurface,
+    calmExplanation,
+    correctionHint,
+  };
+  const showCalmExplanation = shouldShowCalmExplanation(entry, displayContext);
+  const showCorrectionHint = shouldShowCorrectionHint(entry, displayContext);
+  const showOriginalText = shouldShowOriginalText(entry, displayContext);
 
   return (
     <div
@@ -781,9 +868,9 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
                       </div>
                     ))}
                 {metaShopping
-                  ? metaShopping.items.length > 3 && (
+                  ? shoppingItems.length > 3 && (
                       <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>
-                        +{metaShopping.items.length - 3} más
+                        +{shoppingItems.length - 3} más
                       </p>
                     )
                   : checklistItems.length > 3 && (
@@ -823,8 +910,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
               )}
               {isShoppingList && (
                 <ProgressLabel
-                  total={metaShopping ? metaShopping.items.length : checklistItems.length}
-                  checked={metaShopping ? metaShopping.items.filter((i) => i.checked).length : checklistItems.filter((i) => i.checked).length}
+                  total={metaShopping ? shoppingItems.length : checklistItems.length}
+                  checked={metaShopping ? shoppingItems.filter((i) => i.checked).length : checklistItems.filter((i) => i.checked).length}
                   totalEstimated={metaShopping?.progress.totalEstimated}
                   totalChecked={metaShopping?.progress.totalChecked}
                 />
@@ -860,11 +947,11 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
                 {isShoppingList ? (
                   <div style={{ display: 'grid', gap: '2px' }}>
                     {metaShopping ? (
-                      metaShopping.items.length === 0 ? (
-                        <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Sin ítems detectados</p>
+                      shoppingItems.length === 0 ? (
+                        <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Lista sin ítems</p>
                       ) : (
                         <>
-                          {metaShopping.items.map((item) => (
+                          {shoppingItems.map((item) => (
                             <MetadataChecklistRow
                               key={item.id}
                               item={item}
@@ -901,47 +988,61 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey 
                         <ChecklistRow key={item.localId} item={item} onToggle={onToggleItem} />
                       ))
                     )}
-                    {detailOriginal && (
+                    {showOriginalText && detailOriginal && (
                       <p style={{ margin: '8px 0 0', fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                         {detailOriginal}
                       </p>
                     )}
                   </div>
+                ) : isCalendar ? (
+                  <CalendarDetail entry={entry} />
                 ) : isPayment ? (
                   <>
-                    <DetailLine label="Liev" value={
+                    {showCalmExplanation && (
+                      <DetailLine label="Liev" value={
                       getFinancialDirection(entry) === 'income'
                         ? 'Ingreso registrado'
                         : (calmExplanation ?? 'Pago pendiente')
-                    } />
+                      } />
+                    )}
                     <DetailLine label="Monto" value={amountLabel} />
                     <DetailLine label="Cuándo" value={whenLabel} />
                     <DetailLine label="Tipo" value={`${getFinancialDirection(entry) === 'income' ? 'ingreso' : 'egreso'} / ${getFinancialCategory(entry)}`} />
                     <DetailLine label="Estado" value={statusText} />
                     <DetailLine label="Próximo paso" value={getFinancialDirection(entry) === 'income' ? 'dejarlo registrado si ya entró' : 'marcar como pagado cuando lo resuelvas'} />
-                    <DetailLine label="Detalle original" value={detailOriginal} />
+                    {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
                   </>
                 ) : isPetOrHealth ? (
                   <>
-                    <DetailLine label="Liev" value={calmExplanation ?? (entry.type === 'pet' ? 'Cuidado de mascota' : 'Cuidado personal')} />
+                    {showCalmExplanation && (
+                      <DetailLine label="Liev" value={calmExplanation ?? (entry.type === 'pet' ? 'Cuidado de mascota' : 'Cuidado personal')} />
+                    )}
                     <DetailLine label="Cuándo" value={whenLabel} />
                     <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
-                    <DetailLine label="Detalle original" value={detailOriginal} />
+                    {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
                   </>
                 ) : entry.type === 'note' ? (
                   <>
-                    <DetailLine label="Liev" value={calmExplanation ?? 'Nota guardada'} />
-                    <DetailLine label="Detalle original" value={detailOriginal} />
+                    {/* Only show Liev explanation when genuinely needed (low confidence / auto-corrected) */}
+                    {showCalmExplanation && calmExplanation && (
+                      <DetailLine label="Liev" value={calmExplanation} />
+                    )}
+                    {/* Show note body directly without a "Detalle original" label */}
+                    {showOriginalText && detailOriginal && (
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        {detailOriginal}
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>
-                    {calmExplanation && <DetailLine label="Liev" value={calmExplanation} />}
+                    {showCalmExplanation && calmExplanation && <DetailLine label="Liev" value={calmExplanation} />}
                     <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
                     <DetailLine label="Cuándo" value={whenLabel} />
-                    <DetailLine label="Detalle original" value={detailOriginal} />
+                    {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
                   </>
                 )}
-                {correctionHint && (
+                {showCorrectionHint && correctionHint && (
                   <p style={{
                     margin: '4px 0 0',
                     fontSize: '10px',

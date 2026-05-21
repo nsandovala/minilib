@@ -10,6 +10,7 @@ export default function TodosPage() {
       title="Pagos"
       description="Vista legacy conectada al nuevo filtro de pagos del MVP."
       filter={getPaymentEntries}
+      currentSurface="todos"
       searchPlaceholder="Buscar pagos..."
       emptyLabel={TASK_AGENT.ui.emptyState.title}
       emptyHint={TASK_AGENT.ui.emptyState.body}

@@ -10,6 +10,7 @@ export default function PetsPage() {
       title="Mascotas"
       description="Comida, vacunas y pendientes."
       filter={getPetEntries}
+      currentSurface="pets"
       searchPlaceholder="Buscar mascotas..."
       emptyLabel={PET_AGENT.ui.emptyState.title}
       emptyHint={PET_AGENT.ui.emptyState.body}

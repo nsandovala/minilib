@@ -10,6 +10,7 @@ export default function HealthPage() {
       title="Salud"
       description="Remedios, controles y citas."
       filter={getHealthEntries}
+      currentSurface="health"
       searchPlaceholder="Buscar salud..."
       emptyLabel={HEALTH_AGENT.ui.emptyState.title}
       emptyHint={HEALTH_AGENT.ui.emptyState.body}

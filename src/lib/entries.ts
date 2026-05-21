@@ -1,5 +1,6 @@
-import type { TimelineEntry } from '@/types';
+import type { CalendarEntryMetadata, TimelineEntry } from '@/types';
 import { formatLocalDateKey, addDays } from './date';
+export { getSafeShoppingItems, getShoppingMetadata } from './shopping-metadata';
 
 export type EntryPriority = 'normal' | 'important' | 'urgent';
 export type FinancialDirection = 'income' | 'expense';
@@ -15,6 +16,21 @@ const INCOME_PATTERN =
 export function getFinancialDirection(entry: TimelineEntry): FinancialDirection {
   const haystack = `${entry.text} ${entry.title}`;
   return INCOME_PATTERN.test(haystack) ? 'income' : 'expense';
+}
+
+export function getCalendarMetadata(entry: TimelineEntry): CalendarEntryMetadata['calendar'] | null {
+  const candidate = entry.metadata as CalendarEntryMetadata | null | undefined;
+  if (!candidate || typeof candidate !== 'object' || !('calendar' in candidate)) return null;
+
+  const calendar = candidate.calendar;
+  if (!calendar || typeof calendar !== 'object' || !Array.isArray(calendar.events)) return null;
+  if (calendar.kind !== 'multi_event' && calendar.kind !== 'single_event') return null;
+
+  return calendar;
+}
+
+export function isCalendarEntry(entry: TimelineEntry): boolean {
+  return getCalendarMetadata(entry) !== null;
 }
 
 export function getIncomeCategory(entry: TimelineEntry): string {
@@ -148,6 +164,7 @@ export function entryLooksLikePurchase(entry: TimelineEntry): boolean {
 }
 
 export function getEntryDisplayType(entry: TimelineEntry): string {
+  if (isCalendarEntry(entry)) return 'calendario';
   if (entry.type === 'shopping_list') return 'lista';
   if (entry.type === 'payment') return 'pago';
   if (entry.type === 'health' || entry.type === 'appointment') return 'salud';
@@ -312,6 +329,16 @@ export function getShoppingStage(checkedCount: number, totalCount: number): 'pen
 export function getEntryNextStep(entry: TimelineEntry): string {
   if (entry.done) return 'sin siguiente paso';
 
+  const calendar = getCalendarMetadata(entry);
+  if (calendar) {
+    if (calendar.kind === 'multi_event' && calendar.events.length === 0 && calendar.expectedCount) {
+      return 'agregar horarios para ordenar este día';
+    }
+    if (calendar.events.length > 1) return 'seguir el orden del día';
+    if (calendar.events[0]?.time) return `prepararlo para las ${calendar.events[0].time}`;
+    return 'dejarlo visible para este día';
+  }
+
   if (entry.type === 'shopping_list') return 'marcar ítems al comprar';
 
   if (hasDetectedList(entry)) {
@@ -366,6 +393,15 @@ export function getEntryCategoryMeaning(entry: TimelineEntry): string {
 }
 
 export function getEntrySemanticInterpretation(entry: TimelineEntry): string {
+  const calendar = getCalendarMetadata(entry);
+  if (calendar) {
+    if (calendar.kind === 'multi_event' && calendar.events.length === 0 && calendar.expectedCount) {
+      return 'día detectado con eventos todavía por ordenar';
+    }
+    return calendar.kind === 'multi_event'
+      ? 'agenda detectada para ordenar el día'
+      : 'evento agendado para no perderlo de vista';
+  }
   if (hasDetectedList(entry)) return 'lista práctica detectada para ordenar compras o pendientes del hogar';
   if (entry.done) return 'resuelto y fuera de la cabeza';
   if (entry.type === 'payment') return 'compromiso financiero pendiente';

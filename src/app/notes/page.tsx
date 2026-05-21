@@ -28,7 +28,7 @@ export default function NotesPage() {
   };
 
   return (
-    <div style={{ position: 'relative', minHeight: '100vh' }}>
+    <div style={{ position: 'relative', minHeight: '100vh', paddingBottom: 'calc(108px + env(safe-area-inset-bottom, 0px))' }}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Notas</h1>

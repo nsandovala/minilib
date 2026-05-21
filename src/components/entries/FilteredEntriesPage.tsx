@@ -15,6 +15,7 @@ interface FilteredEntriesPageProps {
   description: string;
   filter: (entries: TimelineEntry[]) => TimelineEntry[];
   searchFilter?: Omit<QueryFilter, 'search'>;
+  currentSurface?: string;
 }
 
 export default function FilteredEntriesPage({
@@ -25,6 +26,7 @@ export default function FilteredEntriesPage({
   description,
   filter,
   searchFilter,
+  currentSurface,
 }: FilteredEntriesPageProps) {
   const [search, setSearch] = useState('');
   const entries = useEntries();
@@ -42,7 +44,7 @@ export default function FilteredEntriesPage({
   const pendingCount = useMemo(() => getPendingCount(filteredEntries), [filteredEntries]);
 
   return (
-    <div style={{ position: 'relative', minHeight: '100vh' }}>
+    <div style={{ position: 'relative', minHeight: '100vh', paddingBottom: 'calc(108px + env(safe-area-inset-bottom, 0px))' }}>
       <div className="page-header">
         <div>
           <h1 className="page-title">{title}</h1>
@@ -128,7 +130,7 @@ export default function FilteredEntriesPage({
           <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>{emptyHint}</p>
         </div>
       ) : (
-        <TimelineView entries={filteredEntries} onRefresh={() => void 0} />
+        <TimelineView entries={filteredEntries} onRefresh={() => void 0} currentSurface={currentSurface} />
       )}
     </div>
   );

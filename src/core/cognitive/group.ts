@@ -118,3 +118,4 @@ export function getMicrocopy(entry: TimelineEntry): string | null {
   if (isToday && entry.type === 'pet') return 'pendiente hoy';
   return null;
 }
+

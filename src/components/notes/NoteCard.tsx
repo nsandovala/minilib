@@ -1,6 +1,9 @@
 'use client';
 
 import type { TimelineEntry } from '@/types';
+import { getCalendarMetadata } from '@/lib/entries';
+import { sortCalendarEvents } from '@/core/calendar/event-parser';
+import { shouldShowOriginalText } from '@/core/display/display-rules';
 
 interface NoteCardProps {
   note: TimelineEntry;
@@ -8,7 +11,7 @@ interface NoteCardProps {
   onDelete: (id: number) => void;
 }
 
-function formatRelativeDate(date: Date): string {
+function formatUpdatedAtLabel(date: Date): string {
   const diff = Date.now() - date.getTime();
   if (diff < 60_000) return 'ahora';
   if (diff < 3_600_000) {
@@ -23,7 +26,21 @@ function formatRelativeDate(date: Date): string {
   return date.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' });
 }
 
+function formatCalendarDateLabel(dateStr?: string | null): string | null {
+  if (!dateStr) return null;
+  return new Date(`${dateStr}T12:00:00`).toLocaleDateString('es-CL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).replace(/^\w/, (char) => char.toUpperCase());
+}
+
 export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
+  const calendar = getCalendarMetadata(note);
+  const calendarEvents = sortCalendarEvents(calendar?.events ?? []);
+  const calendarDateLabel = formatCalendarDateLabel(note.date);
+  const showCalendarOriginalText = shouldShowOriginalText(note, { expanded: true });
+
   return (
     <div
       className="glass-card relative overflow-hidden cursor-pointer active:scale-[0.99]"
@@ -53,20 +70,109 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
         >
           {note.title || 'Sin título'}
         </h3>
-        <p
-          style={{
-            fontSize: '13px',
-            color: 'var(--text-secondary)',
-            lineHeight: 1.5,
-            marginTop: '6px',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
-          {note.text}
-        </p>
+        {calendar ? (
+          <div style={{ marginTop: '8px', display: 'grid', gap: '8px' }}>
+            {calendarDateLabel && (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.45,
+                }}
+              >
+                {calendarDateLabel}
+              </p>
+            )}
+
+            {calendarEvents.length > 0 ? (
+              <div style={{ display: 'grid', gap: '5px' }}>
+                {calendarEvents.map((event) => (
+                  <div
+                    key={`${note.localId}-${event.order}-${event.time}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '13px',
+                      color: 'var(--text-secondary)',
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        color: '#c9a882',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {event.time}
+                    </span>
+                    <span style={{ color: 'var(--text-tertiary)' }}>·</span>
+                    <span>{event.label || `Evento ${event.order}`}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: '4px' }}>
+                {calendar.expectedCount ? (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '13px',
+                      color: 'var(--text-secondary)',
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {calendar.expectedCount} eventos por detallar
+                  </p>
+                ) : null}
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '12px',
+                    color: 'var(--text-muted)',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Agrega horarios para ordenar este día.
+                </p>
+              </div>
+            )}
+
+            {showCalendarOriginalText ? (
+              <p
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-tertiary)',
+                  lineHeight: 1.45,
+                  margin: 0,
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}
+              >
+                {note.text}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p
+            style={{
+              fontSize: '13px',
+              color: 'var(--text-secondary)',
+              lineHeight: 1.5,
+              marginTop: '6px',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
+            {note.text}
+          </p>
+        )}
         <div
           style={{
             marginTop: '14px',
@@ -82,7 +188,7 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
               color: 'var(--text-tertiary)',
             }}
           >
-            {formatRelativeDate(note.updatedAt ?? note.createdAt)}
+            {formatUpdatedAtLabel(note.updatedAt ?? note.createdAt)}
           </span>
           <div style={{ display: 'flex', gap: '6px' }}>
             <button

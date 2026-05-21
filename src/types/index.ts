@@ -93,7 +93,23 @@ export interface ShoppingMetadata {
   progress: ShoppingProgress;
 }
 
-export type EntryMetadata = ShoppingMetadata | Record<string, unknown>;
+export interface CalendarEventItem {
+  order: number;
+  time: string;
+  label: string;
+}
+
+export interface CalendarMetadata {
+  kind: 'multi_event' | 'single_event';
+  expectedCount?: number;
+  events: CalendarEventItem[];
+}
+
+export interface CalendarEntryMetadata {
+  calendar: CalendarMetadata;
+}
+
+export type EntryMetadata = ShoppingMetadata | CalendarEntryMetadata | Record<string, unknown>;
 
 export interface ChecklistItem {
   id?: number;

@@ -1,5 +1,6 @@
-import type { EntryType, ParsedEntry, ShoppingMetadata } from '@/types';
+import type { CalendarEntryMetadata, EntryType, ParsedEntry, ShoppingMetadata } from '@/types';
 import type { ExtractedTokens } from './parser-agent';
+import { parseCalendarEventInput } from '../calendar/event-parser.ts';
 import {
   resolveListEntryType,
   isLongFormNote,
@@ -106,7 +107,11 @@ export function detectType(tokens: ExtractedTokens, source?: string): EntryType 
   return confidence >= threshold ? type : 'note';
 }
 
-function buildTitle(tokens: ExtractedTokens, type: EntryType): string {
+function buildTitle(tokens: ExtractedTokens, type: EntryType, calendarMetadata?: CalendarEntryMetadata | null): string {
+  if (calendarMetadata?.calendar) {
+    return calendarMetadata.calendar.events[0]?.label || 'Evento';
+  }
+
   if (tokens.isListLike) {
     if (type === 'health') return 'Compra de farmacia';
     if (tokens.detectedTags.includes('mascotas')) return 'Lista para mascotas';
@@ -174,21 +179,28 @@ export function normalizeEntry(tokens: ExtractedTokens, source?: string): Parsed
   const threshold = source === 'notes' ? 0.85 : 0.75;
   const type = classification.confidence >= threshold ? classification.type : 'note';
 
-  const title = buildTitle(tokens, type);
+  const calendarResult = type !== 'payment' && type !== 'shopping_list'
+    ? parseCalendarEventInput(tokens.rawText)
+    : null;
+  const calendarMetadata = calendarResult?.metadata ?? null;
+  const title = calendarResult?.matched && calendarResult.title
+    ? calendarResult.title
+    : buildTitle(tokens, type, calendarMetadata);
   const tags = Array.from(new Set([...buildTags(tokens.rawText, type), ...tokens.detectedTags]));
-  const metadata = buildShoppingMetadata(tokens);
+  const shoppingMetadata = buildShoppingMetadata(tokens);
+  const metadata = shoppingMetadata ?? calendarMetadata ?? undefined;
 
   const shoppingTotal =
-    metadata && metadata.listKind === 'shopping' && metadata.progress.totalEstimated > 0
-      ? metadata.progress.totalEstimated
+    shoppingMetadata && shoppingMetadata.listKind === 'shopping' && shoppingMetadata.progress.totalEstimated > 0
+      ? shoppingMetadata.progress.totalEstimated
       : undefined;
 
   return {
     text: tokens.rawText,
     type,
     title,
-    date: tokens.date ?? undefined,
-    time: tokens.time ?? undefined,
+    date: calendarResult?.matched ? calendarResult.date ?? undefined : tokens.date ?? undefined,
+    time: calendarResult?.matched ? calendarResult.time ?? undefined : tokens.time ?? undefined,
     tags,
     amount: shoppingTotal ?? tokens.amount ?? undefined,
     checklistItems: tokens.checklistItems.length ? tokens.checklistItems : undefined,

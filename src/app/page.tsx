@@ -20,6 +20,7 @@ import LiveClock from '@/components/ui/LiveClock';
 import WeatherPill from '@/components/ui/WeatherPill';
 import { getLocationAndWeather } from '@/lib/weather';
 import type { ShoppingMetadata, TimelineEntry } from '@/types';
+import { isCalendarEntry } from '@/lib/entries';
 
 type ChipFilter = 'all' | 'compra' | 'pago' | 'salud' | 'mascota' | 'casa' | 'calendario';
 
@@ -55,7 +56,8 @@ function applyChip(entries: TimelineEntry[], chip: ChipFilter): TimelineEntry[] 
     case 'salud': return getHealthEntries(entries);
     case 'mascota': return getPetEntries(entries);
     case 'casa': return entries.filter((e) => e.type === 'task');
-    default: return entries; // 'calendario' and 'all' show everything
+    case 'calendario': return entries.filter((e) => isCalendarEntry(e));
+    default: return entries;
   }
 }
 
@@ -210,7 +212,7 @@ function SummaryCell({ label, value, money }: { label: string; value: number; mo
     : String(value);
 
   return (
-    <div>
+    <div style={{ paddingBottom: 'calc(108px + env(safe-area-inset-bottom, 0px))' }}>
       <p style={{ margin: 0, fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         {label}
       </p>
@@ -861,7 +863,7 @@ export default function HomePage() {
 
       {showCalendar && <MiniCalendar entries={entries} />}
 
-      <TimelineView entries={filteredEntries} onRefresh={handleRefresh} />
+      <TimelineView entries={filteredEntries} onRefresh={handleRefresh} currentSurface="home" />
 
       <style jsx global>{`
         .chips-scroll::-webkit-scrollbar { display: none; }

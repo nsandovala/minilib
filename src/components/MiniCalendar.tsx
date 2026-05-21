@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import type { TimelineEntry } from '@/types';
-import { formatCLP } from '@/lib/entries';
+import { formatCLP, getCalendarMetadata } from '@/lib/entries';
+import { sortCalendarEvents } from '@/core/calendar/event-parser';
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -81,9 +82,24 @@ export default function MiniCalendar({ entries }: MiniCalendarProps) {
     return s;
   }, [entries]);
 
+  const firstCalendarTimeByEntry = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of entries) {
+      const key = entry.localId || String(entry.id ?? entry.text);
+      const calendar = getCalendarMetadata(entry);
+      const firstTime = calendar ? sortCalendarEvents(calendar.events)[0]?.time : entry.time ?? '';
+      map.set(key, firstTime ?? '');
+    }
+    return map;
+  }, [entries]);
+
   const selectedEntries = useMemo(
-    () => (selected ? entries.filter((e) => e.date === selected) : []),
-    [entries, selected],
+    () => (selected ? entries.filter((e) => e.date === selected).sort((a, b) => {
+      const aCalendarTime = firstCalendarTimeByEntry.get(a.localId || String(a.id ?? a.text)) ?? '';
+      const bCalendarTime = firstCalendarTimeByEntry.get(b.localId || String(b.id ?? b.text)) ?? '';
+      return aCalendarTime.localeCompare(bCalendarTime);
+    }) : []),
+    [entries, selected, firstCalendarTimeByEntry],
   );
 
   const prevMonth = () => {
@@ -324,6 +340,94 @@ export default function MiniCalendar({ entries }: MiniCalendarProps) {
 function CalendarEntryRow({ entry }: { entry: TimelineEntry }) {
   const color = TYPE_COLORS[entry.type] ?? 'rgba(245,240,235,0.4)';
   const label = TYPE_LABELS[entry.type] ?? entry.type;
+  const calendar = getCalendarMetadata(entry);
+  const calendarEvents = sortCalendarEvents(calendar?.events ?? []);
+  const pendingCount = calendar?.kind === 'multi_event' && calendar.expectedCount
+    ? calendar.expectedCount
+    : null;
+
+  if (calendar) {
+    return (
+      <div
+        style={{
+          display: 'grid',
+          gap: '8px',
+          padding: '9px 0',
+          borderBottom: '1px solid rgba(255,248,240,0.04)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span
+            style={{
+              fontSize: '10px',
+              padding: '1px 6px',
+              borderRadius: '8px',
+              border: '1px solid rgba(201,168,130,0.22)',
+              background: 'rgba(201,168,130,0.08)',
+              color: '#c9a882',
+              flexShrink: 0,
+              lineHeight: 1.6,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            calendario
+          </span>
+          <span
+            style={{
+              flex: 1,
+              fontSize: '12px',
+              fontWeight: 500,
+              color: entry.done ? 'var(--text-muted)' : 'var(--text-secondary)',
+              textDecoration: entry.done ? 'line-through' : 'none',
+            }}
+          >
+            {entry.title}
+          </span>
+        </div>
+
+        {calendarEvents.length > 0 ? (
+          <div style={{ display: 'grid', gap: '6px', paddingLeft: '2px' }}>
+            {calendarEvents.map((event) => (
+              <div
+                key={`${entry.localId}-${event.order}-${event.time}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '8px 10px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(255,248,240,0.06)',
+                  background: 'rgba(255,248,240,0.025)',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontFamily: 'var(--font-mono)',
+                    color: '#c9a882',
+                    flexShrink: 0,
+                  }}
+                >
+                  {event.time}
+                </span>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  {event.label || `Evento ${event.order}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : pendingCount ? (
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', paddingLeft: '2px' }}>
+            {pendingCount} eventos por detallar
+          </p>
+        ) : (
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', paddingLeft: '2px' }}>
+            Agrega horarios para ordenar este día.
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div

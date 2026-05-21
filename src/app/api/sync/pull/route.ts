@@ -123,9 +123,11 @@ export async function GET(): Promise<Response> {
       pulledAt,
     });
   } catch (err) {
-    console.error('[pull] 500 —', err instanceof Error ? err.message : 'unknown error');
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[pull] 500 — sync pull failed');
+    }
     return Response.json(
-      { error: err instanceof Error ? err.message : 'Internal error' },
+      { error: 'Internal error' },
       { status: 500 },
     );
   }

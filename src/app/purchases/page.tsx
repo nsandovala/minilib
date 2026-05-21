@@ -6,20 +6,27 @@ import { db } from '@/db';
 import { recordBelongsToActiveUser } from '@/lib/local-user';
 import { useEntries } from '@/hooks/useEntries';
 import TimelineView from '@/components/TimelineView';
-import { formatCLP } from '@/lib/entries';
-import type { TimelineEntry, ChecklistItem, ShoppingMetadata } from '@/types';
+import { formatCLP, getSafeShoppingItems, getShoppingMetadata } from '@/lib/entries';
+import { shouldShowOnSurface } from '@/core/display/surface-resolver';
+import type { TimelineEntry, ChecklistItem } from '@/types';
 import { SHOPPING_AGENT } from '@/core/card-agents';
 
+function isShoppingList(entry: TimelineEntry): boolean {
+  if (entry.type === 'shopping_list') return true;
+  const m = entry.metadata as { listKind?: string } | null | undefined;
+  return m?.listKind === 'shopping';
+}
+
 function getShoppingLists(entries: TimelineEntry[]): TimelineEntry[] {
-  return entries.filter((e) => e.type === 'shopping_list');
+  return entries.filter(isShoppingList);
 }
 
 function getOtherPurchases(entries: TimelineEntry[]): TimelineEntry[] {
-  const terms = ['comprar', 'super', 'mercado', 'feria', 'despensa', 'verdura', 'fruta', 'abarrote', 'limpieza'];
+  // Exclude shopping_list entries (already in getShoppingLists) and use surface resolver
+  // so long-form research notes mentioning purchase keywords don't pollute this view.
   return entries.filter((e) => {
-    if (e.type === 'shopping_list' || e.type === 'payment') return false;
-    const h = `${e.title} ${e.text}`.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    return terms.some((t) => h.includes(t));
+    if (isShoppingList(e)) return false;
+    return shouldShowOnSurface(e, 'purchases');
   });
 }
 
@@ -38,12 +45,13 @@ function ShoppingSummary({ lists, itemsByEntry }: ShoppingSummaryProps) {
   let totalChecked = 0;
 
   for (const list of activeLists) {
-    const meta = list.metadata as ShoppingMetadata | undefined;
-    if (meta?.listKind === 'shopping') {
-      totalItems += meta.items.length;
-      checkedItems += meta.items.filter((i) => i.checked).length;
-      totalEstimated += meta.progress.totalEstimated;
-      totalChecked += meta.progress.totalChecked;
+    const meta = getShoppingMetadata(list);
+    if (meta) {
+      const items = getSafeShoppingItems(list);
+      totalItems += items.length;
+      checkedItems += items.filter((i) => i.checked).length;
+      totalEstimated += meta.progress?.totalEstimated ?? 0;
+      totalChecked += meta.progress?.totalChecked ?? 0;
     } else {
       const items = (itemsByEntry.get(list.localId) ?? []).filter((i) => !i.deletedAt);
       totalItems   += items.length;
@@ -166,7 +174,7 @@ export default function PurchasesPage() {
   const activeListCount = shoppingLists.filter((e) => !e.done).length;
 
   return (
-    <div style={{ position: 'relative', minHeight: '100vh' }}>
+    <div style={{ position: 'relative', minHeight: '100vh', paddingBottom: 'calc(108px + env(safe-area-inset-bottom, 0px))' }}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Compras</h1>
@@ -194,7 +202,7 @@ export default function PurchasesPage() {
           </p>
         </div>
       ) : (
-        <TimelineView entries={allPurchases} onRefresh={() => void 0} />
+        <TimelineView entries={allPurchases} onRefresh={() => void 0} currentSurface="purchases" />
       )}
     </div>
   );

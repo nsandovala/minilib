@@ -1,4 +1,5 @@
 import type { TimelineEntry, EntryType } from '@/types';
+import { shouldShowOnSurface, isLongFormNote } from '../display/surface-resolver';
 
 export interface QueryFilter {
   type?: EntryType;
@@ -114,11 +115,16 @@ export function getPaymentEntries(entries: TimelineEntry[]): TimelineEntry[] {
 }
 
 export function getHealthEntries(entries: TimelineEntry[]): TimelineEntry[] {
-  return entries.filter((entry) => entry.type === 'health' || entry.type === 'appointment');
+  // Type-based filter + long-form note guard: a research doc mis-typed as health should not appear here.
+  return entries.filter(
+    (entry) => (entry.type === 'health' || entry.type === 'appointment') && !isLongFormNote(entry),
+  );
 }
 
 export function getPetEntries(entries: TimelineEntry[]): TimelineEntry[] {
-  return entries.filter((entry) => entry.type === 'pet' || matchesAnyTerm(entry, PET_TERMS));
+  // Use surface resolver to guard against long-form notes that merely mention pet keywords.
+  // Legacy entries with wrong type are handled at display layer; data is never mutated.
+  return entries.filter((entry) => shouldShowOnSurface(entry, 'pets'));
 }
 
 export function getNoteEntries(entries: TimelineEntry[]): TimelineEntry[] {

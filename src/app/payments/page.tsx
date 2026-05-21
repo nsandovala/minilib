@@ -15,6 +15,7 @@ import {
   isOverdue,
 } from '@/lib/entries';
 import { PAYMENT_AGENT } from '@/core/card-agents';
+import { computeFinanceSummary } from '@/core/finance/summary';
 
 type Tab = 'all' | 'income' | 'expense';
 type ManualMode = 'income' | 'payment' | 'purchase';
@@ -107,12 +108,12 @@ function SummaryRow({ label, value, color, dim }: SummaryRowProps) {
   );
 }
 
-function MiniBars({ totalIncome, totalExpenses, available }: { totalIncome: number; totalExpenses: number; available: number }) {
-  const maxValue = Math.max(totalIncome, totalExpenses, Math.abs(available), 1);
+function MiniBars({ totalIncome, totalExpenses, availableProjected }: { totalIncome: number; totalExpenses: number; availableProjected: number }) {
+  const maxValue = Math.max(totalIncome, totalExpenses, Math.abs(availableProjected), 1);
   const bars = [
     { label: 'Ingresa', value: totalIncome, color: '#7a9e7e' },
     { label: 'Sale', value: totalExpenses, color: '#c9a882' },
-    { label: 'Queda', value: Math.max(available, 0), color: available < 0 ? '#c47070' : 'rgba(245,240,235,0.72)' },
+    { label: 'Queda', value: Math.max(availableProjected, 0), color: availableProjected < 0 ? '#c47070' : 'rgba(245,240,235,0.72)' },
   ];
 
   return (
@@ -441,7 +442,12 @@ export default function PaymentsPage() {
   const allEntries = useEntries();
 
   const financeEntries = useMemo(
-    () => allEntries.filter((entry) => typeof entry.amount === 'number' && !Number.isNaN(entry.amount)),
+    () => allEntries.filter(
+      (entry) =>
+        entry.type === 'payment' &&
+        typeof entry.amount === 'number' &&
+        !Number.isNaN(entry.amount),
+    ),
     [allEntries],
   );
 
@@ -455,21 +461,9 @@ export default function PaymentsPage() {
     [financeEntries],
   );
 
-  const totalIncome = useMemo(() => incomeEntries.reduce((s, e) => s + (e.amount ?? 0), 0), [incomeEntries]);
-  const totalExpenses = useMemo(() => expenseEntries.reduce((s, e) => s + (e.amount ?? 0), 0), [expenseEntries]);
-  const available = totalIncome - totalExpenses;
-
-  const pendingExpenses = useMemo(
-    () => expenseEntries.filter((e) => !e.done).reduce((s, e) => s + (e.amount ?? 0), 0),
-    [expenseEntries],
-  );
-  const paidExpenses = useMemo(
-    () => expenseEntries.filter((e) => e.done).reduce((s, e) => s + (e.amount ?? 0), 0),
-    [expenseEntries],
-  );
-
-  const spentPct = totalIncome > 0 ? Math.min((totalExpenses / totalIncome) * 100, 100) : 0;
-  const isOverspent = totalIncome > 0 && available < 0;
+  const summary = useMemo(() => computeFinanceSummary(financeEntries), [financeEntries]);
+  const spentPct = summary.incomeTotal > 0 ? Math.min((summary.expenseTotal / summary.incomeTotal) * 100, 100) : 0;
+  const isOverspent = summary.incomeTotal > 0 && summary.availableProjected < 0;
 
   const baseEntries = useMemo(() => {
     if (activeTab === 'income') return incomeEntries;
@@ -501,7 +495,7 @@ export default function PaymentsPage() {
   const hasEntries = financeEntries.length > 0;
 
   return (
-    <div style={{ minHeight: '100vh', paddingBottom: '48px' }}>
+    <div style={{ minHeight: '100vh', paddingBottom: 'calc(108px + env(safe-area-inset-bottom, 0px))' }}>
       <div style={{ padding: '36px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
           <div>
@@ -562,21 +556,21 @@ export default function PaymentsPage() {
       <div style={{ margin: '16px 20px 0' }}>
         <div className="glass-card" style={{ padding: '18px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0', marginBottom: '12px' }}>
-            <SummaryRow label="Ingresos" value={totalIncome} color="#7a9e7e" dim={totalIncome === 0} />
+              <SummaryRow label="Ingresos" value={summary.incomeTotal} color="#7a9e7e" dim={summary.incomeTotal === 0} />
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <SummaryRow label="Egresos" value={totalExpenses} color="#c47070" dim={totalExpenses === 0} />
+              <SummaryRow label="Egresos" value={summary.expenseTotal} color="#c47070" dim={summary.expenseTotal === 0} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <SummaryRow
-                label="Disponible"
-                value={Math.abs(available)}
-                color={isOverspent ? '#c47070' : available > 0 ? 'var(--text-primary)' : 'var(--text-muted)'}
-                dim={totalIncome === 0 && totalExpenses === 0}
+                label="Disponible proyectado"
+                value={Math.abs(summary.availableProjected)}
+                color={isOverspent ? '#c47070' : summary.availableProjected > 0 ? 'var(--text-primary)' : 'var(--text-muted)'}
+                dim={summary.incomeTotal === 0 && summary.expenseTotal === 0}
               />
             </div>
           </div>
 
-          {totalIncome > 0 && (
+          {summary.incomeTotal > 0 && (
             <div
               style={{
                 height: '3px',
@@ -599,31 +593,39 @@ export default function PaymentsPage() {
             </div>
           )}
 
-          <MiniBars totalIncome={totalIncome} totalExpenses={totalExpenses} available={available} />
+          <MiniBars
+            totalIncome={summary.incomeTotal}
+            totalExpenses={summary.expenseTotal}
+            availableProjected={summary.availableProjected}
+          />
 
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '14px' }}>
             <div>
               <p style={{ margin: 0, fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
                 Pendiente
               </p>
-              <p style={{ margin: '2px 0 0', fontFamily: 'var(--font-mono)', fontSize: '13px', color: pendingExpenses > 0 ? '#b8944e' : 'var(--text-muted)' }}>
-                {pendingExpenses > 0 ? formatCLP(pendingExpenses) : '—'}
+              <p style={{ margin: '2px 0 0', fontFamily: 'var(--font-mono)', fontSize: '13px', color: summary.pendingExpenseTotal > 0 ? '#b8944e' : 'var(--text-muted)' }}>
+                {summary.pendingExpenseTotal > 0 ? formatCLP(summary.pendingExpenseTotal) : '—'}
               </p>
             </div>
             <div style={{ width: '1px', height: '32px', background: 'var(--glass-border)', flexShrink: 0 }} />
             <div>
               <p style={{ margin: 0, fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
-                Resuelto
+                Pagado
               </p>
-              <p style={{ margin: '2px 0 0', fontFamily: 'var(--font-mono)', fontSize: '13px', color: paidExpenses > 0 ? '#7a9e7e' : 'var(--text-muted)' }}>
-                {paidExpenses > 0 ? formatCLP(paidExpenses) : '—'}
+              <p style={{ margin: '2px 0 0', fontFamily: 'var(--font-mono)', fontSize: '13px', color: summary.paidExpenseTotal > 0 ? '#7a9e7e' : 'var(--text-muted)' }}>
+                {summary.paidExpenseTotal > 0 ? formatCLP(summary.paidExpenseTotal) : '—'}
               </p>
             </div>
+            <div style={{ width: '1px', height: '32px', background: 'var(--glass-border)', flexShrink: 0 }} />
+            <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+              Egresos = Pagado + Pendiente
+            </p>
             {isOverspent && (
               <>
                 <div style={{ width: '1px', height: '32px', background: 'var(--glass-border)', flexShrink: 0 }} />
                 <p style={{ margin: 0, fontSize: '11px', color: '#d6a2a2', lineHeight: 1.4, flex: 1 }}>
-                  Tus egresos superan tus ingresos por {formatCLP(Math.abs(available))}.
+                  Tus egresos superan tus ingresos por {formatCLP(Math.abs(summary.availableProjected))}.
                 </p>
               </>
             )}
