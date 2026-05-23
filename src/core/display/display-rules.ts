@@ -60,11 +60,11 @@ function isGenericExplanation(copy?: string | null): boolean {
   if (!copy) return true;
   const normalized = normalizeEntryText(copy).toLowerCase();
   return [
-    'guardé esto como nota para evitar ruido en tu flujo de trabajo.',
+    'guardé esto como nota para que mantengas tu flujo de trabajo en orden.',
     'tarea pendiente detectada. la mantengo visible hasta que la completes.',
-    'pago pendiente. lo puse arriba por costo de olvido.',
-    'pendiente de mascota detectado.',
-    'lista detectada para ordenar compras sin fricción.',
+    'pago pendiente. lo puse arriba por riesgo de olvido.',
+    'pendiente de mascota notificado.',
+    'lista detectada para ordenar sus compras.',
   ].includes(normalized);
 }
 
