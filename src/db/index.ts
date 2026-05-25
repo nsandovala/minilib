@@ -186,6 +186,18 @@ export class MiniLibDB extends Dexie {
           if (!('ownerUserId' in item)) item['ownerUserId'] = null;
         });
       });
+
+    // v9: adds deletedAt index to entries for efficient soft-delete filtering
+    this.version(9).stores({
+      notes: '++id, updatedAt',
+      drawings: '++id, createdAt',
+      medications: '++id, active, name',
+      todos: '++id, done, category, createdAt',
+      appointments: '++id, date, reminded',
+      scheduled_notifications: '++id, notifId, scheduledAt, fired',
+      entries: '++id, &localId, ownerUserId, type, date, done, createdAt, syncedAt, deletedAt',
+      checklist_items: '++id, &localId, ownerUserId, localEntryId, checked, updatedAt, syncedAt',
+    });
   }
 }
 

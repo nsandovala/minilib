@@ -22,6 +22,8 @@ export async function sync(): Promise<void> {
     setSyncState({ status: 'success', lastError: null });
     try {
       localStorage.setItem('liev:last-sync-ok', now);
+    } catch { /* storage unavailable */ }
+    try {
       localStorage.removeItem('liev:last-sync-error');
     } catch { /* storage unavailable */ }
   } catch (err) {

@@ -58,7 +58,19 @@ export async function pull(): Promise<void> {
   const userId = getActiveLocalUserId();
   if (!userId) return;
 
-  const res = await fetch('/api/sync/pull');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  let res: Response;
+  try {
+    res = await fetch('/api/sync/pull', { signal: controller.signal });
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') return;
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+
   if (!res.ok) return;
 
   const body = (await res.json()) as {

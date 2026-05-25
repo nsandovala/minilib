@@ -65,14 +65,26 @@ export async function push(): Promise<void> {
 
   if (!dirtyEntries.length && !dirtyItems.length) return;
 
-  const res = await fetch('/api/sync/push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      entries: dedupeEntryPayloads(userId, dirtyEntries.map(entryToPayload)),
-      checklistItems: dedupeChecklistPayloads(userId, dirtyItems.map(checklistItemToPayload)),
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  let res: Response;
+  try {
+    res = await fetch('/api/sync/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entries: dedupeEntryPayloads(userId, dirtyEntries.map(entryToPayload)),
+        checklistItems: dedupeChecklistPayloads(userId, dirtyItems.map(checklistItemToPayload)),
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') return;
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) return;
 
