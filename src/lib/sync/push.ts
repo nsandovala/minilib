@@ -21,6 +21,7 @@ function entryToPayload(entry: TimelineEntry): EntryPayload {
     metadata:  entry.metadata ?? null,
     createdAt: entry.createdAt.toISOString(),
     updatedAt: (entry.updatedAt ?? entry.createdAt).toISOString(),
+    deletedAt: entry.deletedAt ? entry.deletedAt.toISOString() : null,
   };
 }
 
@@ -39,6 +40,7 @@ function checklistItemToPayload(item: ChecklistItem): ChecklistItemPayload {
 }
 
 function entryNeedsSync(entry: TimelineEntry): boolean {
+  if (entry.deletedAt) return true;  // always push deletions
   if (!entry.syncedAt) return true;
   const updated = entry.updatedAt ?? entry.createdAt;
   return updated > entry.syncedAt;

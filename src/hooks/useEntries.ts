@@ -37,7 +37,7 @@ export function useEntries(options: UseEntriesOptions = {}): TimelineEntry[] {
   return (
     useLiveQuery(async () => {
       const entries = await db.entries.toArray();
-      return filterEntries(sortEntries(entries.filter((entry) => recordBelongsToActiveUser(entry.ownerUserId))), options);
+      return filterEntries(sortEntries(entries.filter((entry) => recordBelongsToActiveUser(entry.ownerUserId) && !entry.deletedAt)), options);
     }, [options.search, options.types?.join('|')], []) ?? []
   );
 }

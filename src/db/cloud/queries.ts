@@ -1,5 +1,5 @@
 // Server-only — never import this from client components.
-import { eq, isNull, and, sql } from 'drizzle-orm';
+import { eq, isNull, isNotNull, and, sql } from 'drizzle-orm';
 import { getCloudDb } from './client';
 import { entries, checklistItems } from './schema';
 import type { CloudEntry, CloudEntryInsert, CloudChecklistItem, CloudChecklistItemInsert } from './schema';
@@ -152,6 +152,22 @@ export async function getEntriesForUser(userId: string): Promise<CloudEntry[]> {
       updatedAt: new Date(String(row.updated_at)),
       deletedAt: null,
     }));
+  }
+}
+
+export async function getRecentlyDeletedEntriesForUser(userId: string): Promise<CloudEntry[]> {
+  const cloudDb = getCloudDb();
+  try {
+    return await cloudDb
+      .select()
+      .from(entries)
+      .where(and(
+        eq(entries.userId, userId),
+        isNotNull(entries.deletedAt),
+        sql`${entries.deletedAt} > NOW() - INTERVAL '30 days'`,
+      ));
+  } catch {
+    return [];
   }
 }
 

@@ -95,6 +95,15 @@ export async function pull(): Promise<void> {
     const now = new Date();
 
     for (const p of remote) {
+      if (p.deletedAt) {
+        const existing = byLocalId.get(p.localId);
+        if (existing?.id) {
+          await db.entries.delete(existing.id);
+          await db.checklist_items.where('localEntryId').equals(p.localId).delete();
+        }
+        continue;
+      }
+
       const fingerprint = buildEntryFingerprint(userId, {
         type: p.type,
         title: p.title,

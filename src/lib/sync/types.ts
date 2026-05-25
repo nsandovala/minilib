@@ -15,6 +15,7 @@ export interface EntryPayload {
   metadata: EntryMetadata | null;
   createdAt: string; // ISO-8601
   updatedAt: string; // ISO-8601
+  deletedAt?: string | null; // ISO-8601 or null — tombstone for cross-device deletion
 }
 
 export interface ChecklistItemPayload {

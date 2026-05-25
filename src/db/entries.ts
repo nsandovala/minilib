@@ -143,7 +143,7 @@ export async function getEntries(): Promise<TimelineEntry[]> {
   if (!userId) return [];
 
   const entries = await db.entries.orderBy('createdAt').reverse().toArray();
-  return entries.filter((entry) => recordBelongsToActiveUser(entry.ownerUserId));
+  return entries.filter((entry) => recordBelongsToActiveUser(entry.ownerUserId) && !entry.deletedAt);
 }
 
 /* ─── Finance bridge: shopping list → payment ─────────────────────────────── */
@@ -226,10 +226,12 @@ export async function updateEntry(
 
 export async function deleteEntry(id: number): Promise<void> {
   const entry = await db.entries.get(id);
-  if (entry?.localId) {
+  if (!entry) return;
+  if (entry.localId) {
     await softDeleteChecklistItemsForEntry(entry.localId);
   }
-  await db.entries.delete(id);
+  const now = new Date();
+  await db.entries.update(id, { deletedAt: now, updatedAt: now, syncedAt: null });
 }
 
 /* ─── Shopping item toggle with total recalculation ───────────────────────── */

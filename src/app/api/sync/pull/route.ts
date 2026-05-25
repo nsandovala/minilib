@@ -1,5 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
-import { getEntriesForUser, getChecklistItemsForUser } from '@/db/cloud/queries';
+import { getEntriesForUser, getRecentlyDeletedEntriesForUser, getChecklistItemsForUser } from '@/db/cloud/queries';
 import type { CloudEntry, CloudChecklistItem } from '@/db/cloud/schema';
 import type { EntryPayload, ChecklistItemPayload } from '@/lib/sync/types';
 import { buildChecklistFingerprint, buildEntryFingerprint } from '@/lib/sync/dedupe';
@@ -29,6 +29,7 @@ function cloudEntryToPayload(userId: string, row: CloudEntry): EntryPayload {
     metadata:  row.metadata ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    deletedAt: row.deletedAt ? row.deletedAt.toISOString() : null,
   };
 }
 
@@ -54,15 +55,17 @@ export async function GET(): Promise<Response> {
   }
 
   try {
-    const [entryRows, itemRows] = await Promise.all([
+    const [entryRows, deletedEntryRows, itemRows] = await Promise.all([
       getEntriesForUser(userId),
+      getRecentlyDeletedEntriesForUser(userId),
       getChecklistItemsForUser(userId),
     ]);
+    const allEntryRows = [...entryRows, ...deletedEntryRows];
 
     const dedupedEntries = new Map<string, EntryPayload>();
     const entryAliases = new Map<string, string>();
 
-    for (const row of entryRows) {
+    for (const row of allEntryRows) {
       const payload = cloudEntryToPayload(userId, row);
       const localIdKey = `id:${payload.localId}`;
       const fingerprintKey = buildEntryFingerprint(userId, {

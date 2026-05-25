@@ -163,4 +163,5 @@ export interface TimelineEntry {
   detectedTags?: string[] | null;
   metadata?: EntryMetadata | null;
   syncedAt?: Date | null;
+  deletedAt?: Date | null;
 }

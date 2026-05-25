@@ -39,7 +39,7 @@ function entryToInsert(
     dedupeKey,
     createdAt: new Date(payload.createdAt),
     updatedAt: new Date(payload.updatedAt),
-    deletedAt: null,
+    deletedAt: payload.deletedAt ? new Date(payload.deletedAt) : null,
   };
 }
 
