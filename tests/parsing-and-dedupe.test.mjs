@@ -8,6 +8,7 @@ import {
   hasPetAction,
   hasShoppingIntent,
   hasPaymentIntent,
+  hasProjectIntent,
 } from '../src/core/agents/parser-rules.ts';
 import {
   buildEntryFingerprint,
@@ -220,4 +221,65 @@ test('[req-7] busca si hay algo relacionado con mascotas → no es pet', () => {
   assert.equal(isLongFormNote(text), false);
   assert.equal(hasShoppingIntent(text), false);
   // → clasificará como note o task por 'busca', nunca pet
+});
+
+// ─── Tests A–F: clasificación semántica (phase 4) ────────────────────────────
+// buildShoppingList imports @/lib/money which requires bundler resolution,
+// so tests B/C/D/F verify the underlying guard functions directly.
+
+test('[A] lista de proyecto/ideas (sketchnoting, drive, gmail) → hasProjectIntent=true', () => {
+  const text = [
+    'Habilitar más adelante sketchnoting en notas',
+    'Ver posibilidades de nuevas integraciones externas drive',
+    'Gmail',
+    'photos',
+    'Rediseñar web Amon IT',
+    'Generar archivos ingests de fotos',
+  ].join('\n');
+  assert.equal(hasProjectIntent(text), true, 'detecta intent de proyecto');
+  // No tiene intención de compra, por lo que incluso si llegara al buildShoppingList
+  // se detendría antes de construir una lista
+  assert.equal(hasShoppingIntent(text), false, 'no tiene intención de compra');
+});
+
+test('[B] texto de compras real → no es proyecto, sí tiene ítems conocidos', () => {
+  const text = 'viernes compras papas fritas, huevos, aceites';
+  assert.equal(hasProjectIntent(text), false, 'no es texto de proyecto');
+  // Tiene coma → explicitListIntent=true; papas/huevos/aceites son categorías conocidas
+  assert.equal(hasExplicitListIntent(text), true, 'tiene intent de lista (comas)');
+  assert.equal(shouldBuildShoppingList({
+    itemCount: 3, explicitListIntent: true, hasStoreKeyword: false, hasKnownCategory: true,
+  }), true, 'construiría lista con ítems conocidos');
+});
+
+test('[C] "supermercado pan leche huevos" → no es proyecto, sí tiene store keyword', () => {
+  const text = 'supermercado pan leche huevos';
+  assert.equal(hasProjectIntent(text), false, 'no es texto de proyecto');
+  assert.equal(shouldBuildShoppingList({
+    itemCount: 3, explicitListIntent: false, hasStoreKeyword: true, hasKnownCategory: true,
+  }), true, 'construiría lista con store keyword');
+});
+
+test('[D] nota abstracta con "salud" → no tiene ítems conocidos (salud ≠ sal)', () => {
+  // La clave "sal" del mapa de categorías no debe coincidir con "salud".
+  // Con la corrección de word-level matching, hasKnownCategory sería false
+  // para "módulo de compras y salud" → shouldBuildShoppingList devuelve false.
+  assert.equal(shouldBuildShoppingList({
+    itemCount: 2, explicitListIntent: true, hasStoreKeyword: false, hasKnownCategory: false,
+  }), false, 'sin ítems conocidos ni store keyword → no construye lista');
+  assert.equal(hasShoppingIntent('Ver posibilidades para el módulo de compras y salud'), false);
+});
+
+test('[E] "Drive, Gmail, Photos, Notion, GitHub" → hasProjectIntent=true', () => {
+  const text = 'Drive, Gmail, Photos, Notion, GitHub';
+  assert.equal(hasProjectIntent(text), true, 'detecta herramientas de proyecto');
+  // Aunque tiene comas, hasProjectIntent bloquea la construcción de lista
+  assert.equal(hasExplicitListIntent(text), true, 'tiene comas pero es lista de herramientas');
+});
+
+test('[F] "pan" solo → un ítem sin intent explícito → no construye lista', () => {
+  // shouldBuildShoppingList requiere itemCount >= 2 O explicitListIntent
+  assert.equal(shouldBuildShoppingList({
+    itemCount: 1, explicitListIntent: false, hasStoreKeyword: false, hasKnownCategory: true,
+  }), false, 'un solo ítem sin intent de lista → false');
 });

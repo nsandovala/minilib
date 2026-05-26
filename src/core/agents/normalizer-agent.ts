@@ -187,7 +187,10 @@ export function normalizeEntry(tokens: ExtractedTokens, source?: string): Parsed
     ? calendarResult.title
     : buildTitle(tokens, type, calendarMetadata);
   const tags = Array.from(new Set([...buildTags(tokens.rawText, type), ...tokens.detectedTags]));
-  const shoppingMetadata = buildShoppingMetadata(tokens);
+  // Only attach shopping metadata when the resolved type is actually a list type.
+  // Attaching it to 'note' or 'task' entries causes them to leak into /purchases.
+  const isListType = type === 'shopping_list' || type === 'pet' || type === 'health';
+  const shoppingMetadata = isListType ? buildShoppingMetadata(tokens) : undefined;
   const metadata = shoppingMetadata ?? calendarMetadata ?? undefined;
 
   const shoppingTotal =

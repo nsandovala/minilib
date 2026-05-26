@@ -1,6 +1,6 @@
 import type { ShoppingItem, ShoppingProgress } from '@/types';
 import { normalizeCLP } from '@/lib/money';
-import { hasExplicitListIntent, shouldBuildShoppingList } from './parser-rules';
+import { hasExplicitListIntent, shouldBuildShoppingList, hasProjectIntent } from './parser-rules';
 
 export interface ShoppingListBuildResult {
   listKind: 'shopping';
@@ -297,8 +297,18 @@ function classifyItemCategory(label: string): string {
   if (ITEM_CATEGORY_MAP[normalized]) return ITEM_CATEGORY_MAP[normalized];
   if (ITEM_CATEGORY_MAP[singular]) return ITEM_CATEGORY_MAP[singular];
 
+  // Word-level matching: prevents short keys like "sal", "te", "pan" from matching
+  // inside unrelated words like "salud", "integraciones", "pantalla".
+  const words = normalized.split(/\s+/);
+  for (const word of words) {
+    if (ITEM_CATEGORY_MAP[word]) return ITEM_CATEGORY_MAP[word];
+    const ws = word.replace(/s$/, '');
+    if (ITEM_CATEGORY_MAP[ws]) return ITEM_CATEGORY_MAP[ws];
+  }
+
+  // Substring matching only for multi-word phrase keys (e.g. "pan integral", "pasta dental")
   for (const [key, category] of Object.entries(ITEM_CATEGORY_MAP)) {
-    if (normalized.includes(key)) return category;
+    if (key.includes(' ') && normalized.includes(key)) return category;
   }
 
   return 'otros';
@@ -366,6 +376,8 @@ function buildProgress(items: ShoppingItem[]): ShoppingProgress {
  */
 export function buildShoppingList(input: string): ShoppingListBuildResult | null {
   const raw = input.trim();
+  // Project/integration notes must never be classified as shopping lists
+  if (hasProjectIntent(raw)) return null;
   const cleaned = cleanShoppingIntro(raw);
   const explicitListIntent = hasExplicitListIntent(raw);
 

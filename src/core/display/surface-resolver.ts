@@ -6,6 +6,7 @@
  * visual surface from the full entry shape (metadata, text length, intent).
  */
 import type { TimelineEntry } from '@/types';
+import { hasProjectIntent } from '../agents/parser-rules.ts';
 
 export type Surface =
   | 'home'
@@ -96,7 +97,10 @@ function hasActionablePurchaseIntent(entry: TimelineEntry): boolean {
   if (hasCalendarMetadata(entry)) return false;
   if (entry.type === 'shopping_list') return true;
   const m = entry.metadata as { listKind?: string } | null | undefined;
-  if (m?.listKind === 'shopping') return true;
+  if (m?.listKind === 'shopping') {
+    // Block project/idea entries that got stale shopping metadata from an old parser version
+    return !hasProjectIntent(`${entry.title} ${entry.text}`);
+  }
   if (isLongFormNote(entry)) return false;
   const h = entryHaystack(entry);
   return /\b(supermercado|feria|mercado|despensa|lista de compras|lista para comprar|comprar leche|comprar pan|comprar huevo|comprar fruta|comprar verdura)\b/.test(h);

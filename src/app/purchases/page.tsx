@@ -8,13 +8,18 @@ import { useEntries } from '@/hooks/useEntries';
 import TimelineView from '@/components/TimelineView';
 import { formatCLP, getSafeShoppingItems, getShoppingMetadata } from '@/lib/entries';
 import { shouldShowOnSurface } from '@/core/display/surface-resolver';
+import { hasProjectIntent } from '@/core/agents/parser-rules';
 import type { TimelineEntry, ChecklistItem } from '@/types';
 import { SHOPPING_AGENT } from '@/core/card-agents';
 
 function isShoppingList(entry: TimelineEntry): boolean {
   if (entry.type === 'shopping_list') return true;
   const m = entry.metadata as { listKind?: string } | null | undefined;
-  return m?.listKind === 'shopping';
+  if (m?.listKind === 'shopping') {
+    // Block project/idea entries that got stale shopping metadata from an old parser version
+    return !hasProjectIntent(`${entry.title} ${entry.text}`);
+  }
+  return false;
 }
 
 function getShoppingLists(entries: TimelineEntry[]): TimelineEntry[] {

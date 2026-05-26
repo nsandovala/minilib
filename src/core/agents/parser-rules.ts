@@ -80,3 +80,13 @@ export function hasPaymentIntent(text: string): boolean {
     || /\b(vencimiento|suscripci[oó]n|cuota\s+de|arriendo|hipoteca|pr[eé]stamo)\b/i.test(text)
     || /\bfactura\s+(de|del?|pendiente|venc)/i.test(text);
 }
+
+/**
+ * True when text signals a project, tech integration, or product-development intent.
+ * Used as a negative guard so project/idea notes are never classified as shopping lists.
+ */
+export function hasProjectIntent(text: string): boolean {
+  if (/\b(habilitar|implementar|redise[ñn]ar|migrar|desarrollar|optimizar|sketchnoting|roadmap|backlog|sprint|ingests?)\b/i.test(text)) return true;
+  if (/\b(gmail|github|figma|notion|jira|asana|trello|dropbox|drive|photos|slack|linear|confluence)\b/i.test(text)) return true;
+  return false;
+}
