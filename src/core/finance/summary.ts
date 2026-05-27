@@ -34,6 +34,13 @@ export function computeFinanceSummary(entries: TimelineEntry[]): FinanceSummary 
   };
 
   for (const entry of entries) {
+    const isFinancialEntry =
+      entry.type === 'payment' ||
+      entry.tags.includes('manual') ||
+      entry.tags.includes('income') ||
+      entry.tags.includes('expense');
+    if (!isFinancialEntry) continue;
+
     const amount = getEntryAmount(entry);
     if (amount <= 0) continue;
 

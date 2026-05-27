@@ -1,13 +1,15 @@
 import type { CalendarEntryMetadata, EntryType, ParsedEntry, ShoppingMetadata } from '@/types';
-import type { ExtractedTokens } from './parser-agent';
+import type { ExtractedTokens } from './parser-agent.ts';
 import { parseCalendarEventInput } from '../calendar/event-parser.ts';
 import {
   resolveListEntryType,
   isLongFormNote,
   hasPetAction,
+  hasHealthIntent,
   hasShoppingIntent,
   hasPaymentIntent,
-} from './parser-rules';
+  hasExpensePurchaseIntent,
+} from './parser-rules.ts';
 
 const TYPE_PATTERNS: Record<EntryType, RegExp[]> = {
   payment: [
@@ -18,10 +20,10 @@ const TYPE_PATTERNS: Record<EntryType, RegExp[]> = {
     /\b(thor|luna|max|michis|firulais|pelud)\b/i,
   ],
   health: [
-    /\b(remedio|medicamento|medicina|pastilla|jarabe|dosis|tomar\s+(remedio|medicina|pastilla)|vitamina|insulina|presion|presión|temperatura|malestar|dolor)\b/i,
+    /\b(remedio|medicamento|medicina|pastilla|jarabe|dosis|tomar\s+(remedio|medicina|pastilla)|vitamina|insulina|presion|presión|temperatura|malestar|dolor|terapia|kine|kinesi[oó]logo|kinesiologa|cl[ií]nica|clinica|hospital)\b/i,
   ],
   appointment: [
-    /\b(cita|doctor|doctora|médico|medico|consulta|dentista|oftalmólogo|oftalmologo|dermatólogo|dermatologo|examen|laboratorio|cirugia|cirugía)\b/i,
+    /\b(cita|doctor|doctora|médico|medico|consulta|dentista|oftalmólogo|oftalmologo|dermatólogo|dermatologo|examen|laboratorio|cirugia|cirugía|terapia|kine|kinesi[oó]logo|kinesiologa|control\s+m[eé]dico|cita\s+m[eé]dica)\b/i,
   ],
   reminder: [
     /\b(recordar|recordatorio|acordarse|no\s+olvidar|alerta|avisar)\b/i,
@@ -47,24 +49,12 @@ export interface ClassificationResult {
 export function classifyWithConfidence(tokens: ExtractedTokens): ClassificationResult {
   const text = tokens.rawText;
   const lower = text.toLowerCase();
+  const hasExplicitStoreShoppingContext =
+    /\b(compras?|supermercado|super|minimarket|farmacia|ferreter[ií]a|despensa|feria|mercado)\b/i.test(text);
 
   // Guard: long-form / structured text always → note
   if (isLongFormNote(text)) {
     return { type: 'note', confidence: 0.97, reasons: ['long-form-text'] };
-  }
-
-  // Shopping / pet list — only when there is actual shopping intent
-  if (tokens.isListLike) {
-    if (hasShoppingIntent(text)) {
-      const listType = resolveListEntryType(tokens.detectedTags);
-      // Mascotas tag alone is not enough; require a concrete pet action in the items
-      if (listType === 'pet' && !hasPetAction(text)) {
-        return { type: 'shopping_list', confidence: 0.80, reasons: ['list-mascotas-no-action'] };
-      }
-      return { type: listType, confidence: 0.87, reasons: ['shopping-intent', 'list-like'] };
-    }
-    // List-like structure without shopping intent → not a shopping list
-    return { type: 'note', confidence: 0.78, reasons: ['list-no-shopping-intent'] };
   }
 
   // Payment — requires both a keyword AND explicit financial intent
@@ -77,8 +67,38 @@ export function classifyWithConfidence(tokens: ExtractedTokens): ClassificationR
     return { type: 'pet', confidence: 0.87, reasons: ['pet-action'] };
   }
 
+  // Purchase / expense movement — amount + explicit buy wording, but not a list
+  if (tokens.amount !== null && hasExpensePurchaseIntent(text) && !tokens.isListLike) {
+    return { type: 'payment', confidence: 0.84, reasons: ['purchase-expense-amount'] };
+  }
+
+  // Shopping / pet list — only when there is actual shopping intent
+  if (tokens.isListLike) {
+    if (hasShoppingIntent(text)) {
+      if (hasExplicitStoreShoppingContext) {
+        return { type: 'shopping_list', confidence: 0.89, reasons: ['shopping-store-context', 'list-like'] };
+      }
+      const listType = resolveListEntryType(tokens.detectedTags);
+      // Mascotas tag alone is not enough; require a concrete pet action in the items
+      if (listType === 'pet' && !hasPetAction(text)) {
+        return { type: 'shopping_list', confidence: 0.80, reasons: ['list-mascotas-no-action'] };
+      }
+      return { type: listType, confidence: 0.87, reasons: ['shopping-intent', 'list-like'] };
+    }
+    // List-like structure without shopping intent → not a shopping list
+    return { type: 'note', confidence: 0.78, reasons: ['list-no-shopping-intent'] };
+  }
+
+  // Pet medications or care tied to a known pet name should stay in pets, not health.
+  if (TYPE_PATTERNS.pet.some((p) => p.test(lower)) && TYPE_PATTERNS.health.some((p) => p.test(lower))) {
+    return { type: 'pet', confidence: 0.86, reasons: ['pet-health-combo'] };
+  }
+
   // Health
-  if (TYPE_PATTERNS.health.some((p) => p.test(lower))) {
+  if (hasHealthIntent(text)) {
+    if (TYPE_PATTERNS.appointment.some((p) => p.test(lower))) {
+      return { type: 'appointment', confidence: 0.84, reasons: ['appointment-keywords'] };
+    }
     return { type: 'health', confidence: 0.82, reasons: ['health-keywords'] };
   }
 
@@ -108,8 +128,9 @@ export function detectType(tokens: ExtractedTokens, source?: string): EntryType 
 }
 
 function buildTitle(tokens: ExtractedTokens, type: EntryType, calendarMetadata?: CalendarEntryMetadata | null): string {
-  if (calendarMetadata?.calendar) {
-    return calendarMetadata.calendar.events[0]?.label || 'Evento';
+  const calendarLabel = calendarMetadata?.calendar?.events[0]?.label?.trim();
+  if (calendarLabel) {
+    return calendarLabel;
   }
 
   if (tokens.isListLike) {
@@ -139,13 +160,9 @@ function buildTitle(tokens: ExtractedTokens, type: EntryType, calendarMetadata?:
   if (type === 'shopping_list') {
     return cap(base);
   }
-  if (type === 'payment' && !/\bpagar?\b/i.test(base)) {
+  if (type === 'payment' && !/\b(pagar?|abonar|cobrar|comprar|compra|compre|compr[eé]|gaste|gast[eé])\b/i.test(base)) {
     return `Pagar ${base}`;
   }
-  if (type === 'health' && !/\b(tomar|aplicar|poner)\b/i.test(base)) {
-    return `Tomar ${base}`;
-  }
-
   return cap(base);
 }
 
@@ -179,24 +196,32 @@ export function normalizeEntry(tokens: ExtractedTokens, source?: string): Parsed
   const threshold = source === 'notes' ? 0.85 : 0.75;
   const type = classification.confidence >= threshold ? classification.type : 'note';
 
-  const calendarResult = type !== 'payment' && type !== 'shopping_list'
+  const calendarResult = type !== 'payment'
     ? parseCalendarEventInput(tokens.rawText)
     : null;
   const calendarMetadata = calendarResult?.metadata ?? null;
-  const title = calendarResult?.matched && calendarResult.title
-    ? calendarResult.title
+  const shouldPreferCalendarTitle =
+    calendarResult?.matched
+    && calendarResult.title
+    && calendarResult.title !== 'Evento'
+    && (type === 'note' || type === 'task' || type === 'reminder');
+  const title = shouldPreferCalendarTitle
+    ? calendarResult.title!
     : buildTitle(tokens, type, calendarMetadata);
   const tags = Array.from(new Set([...buildTags(tokens.rawText, type), ...tokens.detectedTags]));
   // Only attach shopping metadata when the resolved type is actually a list type.
   // Attaching it to 'note' or 'task' entries causes them to leak into /purchases.
   const isListType = type === 'shopping_list' || type === 'pet' || type === 'health';
   const shoppingMetadata = isListType ? buildShoppingMetadata(tokens) : undefined;
-  const metadata = shoppingMetadata ?? calendarMetadata ?? undefined;
 
   const shoppingTotal =
     shoppingMetadata && shoppingMetadata.listKind === 'shopping' && shoppingMetadata.progress.totalEstimated > 0
       ? shoppingMetadata.progress.totalEstimated
       : undefined;
+
+  const metadata = shoppingMetadata && calendarMetadata
+    ? { ...shoppingMetadata, ...calendarMetadata }
+    : shoppingMetadata ?? calendarMetadata ?? undefined;
 
   return {
     text: tokens.rawText,

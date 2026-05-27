@@ -6,7 +6,7 @@
  * visual surface from the full entry shape (metadata, text length, intent).
  */
 import type { TimelineEntry } from '@/types';
-import { hasProjectIntent } from '../agents/parser-rules.ts';
+import { hasHealthIntent, hasPetAction, hasProjectIntent } from '../agents/parser-rules.ts';
 
 export type Surface =
   | 'home'
@@ -83,27 +83,39 @@ export function isLongFormNote(entry: TimelineEntry): boolean {
 // ─── Surface intent detectors ─────────────────────────────────────────────────
 
 function hasActionablePetIntent(entry: TimelineEntry): boolean {
-  if (hasCalendarMetadata(entry)) return false;
   if (isLongFormNote(entry)) return false;
   // Shopping lists stay in purchases even if their content mentions pet-care words
   if (entry.type === 'shopping_list') return false;
   const m = entry.metadata as { listKind?: string } | null | undefined;
   if (m?.listKind === 'shopping') return false;
-  const h = entryHaystack(entry);
-  return /\b(veterinario|veterinaria|vacuna|pastilla|desparasitar|bano|banar|corte de pelo|peluqueria|correa|comida para|comida de la|alimento para|arena de|arena del|paseo de|control del perro|control del gato)\b/.test(h);
+  return hasPetAction(`${entry.title} ${entry.text}`);
+}
+
+function hasShoppingStructure(entry: TimelineEntry): boolean {
+  if (entry.type === 'shopping_list') return true;
+  const m = entry.metadata as { listKind?: string } | null | undefined;
+  return m?.listKind === 'shopping';
+}
+
+function shouldShowDomainEntryOnCalendar(entry: TimelineEntry): boolean {
+  if (!entry.date) return false;
+  return hasShoppingStructure(entry)
+    || entry.type === 'pet'
+    || entry.type === 'health'
+    || entry.type === 'appointment';
 }
 
 function hasActionablePurchaseIntent(entry: TimelineEntry): boolean {
-  if (hasCalendarMetadata(entry)) return false;
   if (entry.type === 'shopping_list') return true;
   const m = entry.metadata as { listKind?: string } | null | undefined;
   if (m?.listKind === 'shopping') {
     // Block project/idea entries that got stale shopping metadata from an old parser version
     return !hasProjectIntent(`${entry.title} ${entry.text}`);
   }
+  if (hasCalendarMetadata(entry)) return false;
   if (isLongFormNote(entry)) return false;
   const h = entryHaystack(entry);
-  return /\b(supermercado|feria|mercado|despensa|lista de compras|lista para comprar|comprar leche|comprar pan|comprar huevo|comprar fruta|comprar verdura)\b/.test(h);
+  return /\b(supermercado|super|minimarket|feria|mercado|despensa|farmacia|ferreteria|lista de compras|lista para comprar|compras del super|comprar leche|comprar pan|comprar huevo|comprar fruta|comprar verdura)\b/.test(h);
 }
 
 function hasFinanceIntent(entry: TimelineEntry): boolean {
@@ -113,42 +125,42 @@ function hasFinanceIntent(entry: TimelineEntry): boolean {
 }
 
 function hasActionableHealthIntent(entry: TimelineEntry): boolean {
+  if (entry.type === 'pet') return false;
+  if (hasShoppingStructure(entry)) return false;
   if (entry.type === 'health' || entry.type === 'appointment') {
     return !isLongFormNote(entry);
   }
   if (isLongFormNote(entry)) return false;
-  const h = entryHaystack(entry);
-  return /\b(doctor|doctora|medico|medica|consulta medica|cita medica|dentista|odontologo|examen medico|ecografia|analisis clinico|remedio|pastilla|comprimido|inyeccion|sintoma|fiebre|dolor de cabeza|control medico)\b/.test(h);
+  return hasHealthIntent(`${entry.title} ${entry.text}`);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export function getPrimarySurface(entry: TimelineEntry): Surface {
-  // Rule A: calendar metadata always wins
-  if (hasCalendarMetadata(entry)) return 'calendar';
-
-  // Rule B: long-form notes go to notes regardless of type
+  // Rule A: long-form notes go to notes regardless of type
   if (isLongFormNote(entry)) return 'notes';
 
-  switch (entry.type) {
-    case 'payment':
-      return hasFinanceIntent(entry) ? 'payments' : 'notes';
-    case 'shopping_list':
-      return 'purchases';
-    case 'health':
-    case 'appointment':
-      return 'health';
-    case 'pet':
-      // Short type=pet entries are trusted as valid pet records.
-      // Long-form docs that happen to have type=pet are legacy mis-classifications.
-      return isLongFormNote(entry) ? 'notes' : 'pets';
-    case 'task':
-      return 'todos';
-    case 'note':
-    case 'reminder':
-    default:
-      return 'notes';
-  }
+  // Rule B: explicit payment intent wins over calendar metadata
+  if (hasFinanceIntent(entry)) return 'payments';
+
+  // Rule C: structured shopping entries stay in purchases even if the text mentions medical or pet words
+  if (hasShoppingStructure(entry) && hasActionablePurchaseIntent(entry)) return 'purchases';
+
+  // Rule D: pet intent beats generic calendar routing
+  if (entry.type === 'pet' || hasActionablePetIntent(entry)) return 'pets';
+
+  // Rule E: health/appointment intent beats generic calendar routing
+  if (hasActionableHealthIntent(entry)) return 'health';
+
+  // Rule F: shopping intent beats generic calendar routing
+  if (hasActionablePurchaseIntent(entry)) return 'purchases';
+
+  if (entry.type === 'task') return 'todos';
+
+  // Rule G: generic calendar entries remain calendar-first
+  if (hasCalendarMetadata(entry)) return 'calendar';
+
+  return 'notes';
 }
 
 export function getSecondarySurfaces(entry: TimelineEntry): Surface[] {
@@ -156,11 +168,11 @@ export function getSecondarySurfaces(entry: TimelineEntry): Surface[] {
   const secondary: Surface[] = [];
 
   if (primary === 'calendar') {
-    secondary.push('notes');
     if (entry.date) secondary.push('home');
     return secondary;
   }
 
+  if (hasCalendarMetadata(entry) || shouldShowDomainEntryOnCalendar(entry)) secondary.push('calendar');
   if (primary !== 'home') secondary.push('home');
   return secondary;
 }
@@ -192,12 +204,7 @@ export function resolveSurfaceForEntry(entry: TimelineEntry): ResolvedSurface {
  */
 export function shouldShowOnSurface(entry: TimelineEntry, surface: Surface): boolean {
   // Calendar metadata takes priority for all surfaces
-  if (surface === 'calendar') return hasCalendarMetadata(entry);
-
-  // Rule A: calendar entries only go to calendar + notes + home (if dated)
-  if (hasCalendarMetadata(entry)) {
-    return surface === 'notes' || surface === 'home';
-  }
+  if (surface === 'calendar') return hasCalendarMetadata(entry) || shouldShowDomainEntryOnCalendar(entry);
 
   switch (surface) {
     case 'pets':
@@ -219,13 +226,17 @@ export function shouldShowOnSurface(entry: TimelineEntry, surface: Surface): boo
       return hasActionableHealthIntent(entry);
 
     case 'notes':
-      // Notes surface: notes, reminders, calendar entries, and long-form docs
-      // (including legacy mis-typed pet/health/payment entries that are really notes)
-      return (
-        entry.type === 'note' ||
-        entry.type === 'reminder' ||
-        isLongFormNote(entry)
-      );
+      // Notes surface should show only true notes and long-form thinking.
+      // Legacy entries with stale type='note' must still stay out when a stronger
+      // actionable domain is detected from the content itself.
+      if (isLongFormNote(entry)) return true;
+      if (entry.type !== 'note' && entry.type !== 'reminder') return false;
+      if (hasCalendarMetadata(entry)) return false;
+      if (hasFinanceIntent(entry)) return false;
+      if (hasActionablePetIntent(entry)) return false;
+      if (hasActionableHealthIntent(entry)) return false;
+      if (hasActionablePurchaseIntent(entry)) return false;
+      return true;
 
     case 'todos':
       return entry.type === 'task';

@@ -601,7 +601,19 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
     }
   };
 
-  const displayType      = isCalendarEntry(entry) ? 'calendario' : (getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry));
+  const isShoppingList = entry.type === 'shopping_list' || isMetadataShopping(entry);
+  const isPayment      = entry.type === 'payment';
+  const isPetOrHealth  = entry.type === 'pet' || entry.type === 'health' || entry.type === 'appointment';
+  const isCalendar     = isCalendarEntry(entry);
+  const displayType = currentSurface === 'pets' && isPetOrHealth && entry.type === 'pet'
+    ? 'mascota'
+    : currentSurface === 'health' && (entry.type === 'health' || entry.type === 'appointment')
+      ? 'salud'
+      : currentSurface === 'purchases' && isShoppingList
+        ? 'lista'
+        : isCalendar
+          ? 'calendario'
+          : (getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry));
   const agentConfig      = getAgentForType(entry.type);
   const calmExplanation  = agentConfig?.ui.calmExplanation ?? null;
   const correctionHint   = agentConfig?.ui.correctionHint ?? null;
@@ -610,11 +622,6 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
   const whenLabel        = getWhenLabel(entry);
   const amountLabel      = typeof entry.amount === 'number' ? formatCLP(entry.amount) : '';
   const detailOriginal   = getDetailOriginal(entry);
-
-  const isShoppingList = entry.type === 'shopping_list' || isMetadataShopping(entry);
-  const isPayment      = entry.type === 'payment';
-  const isPetOrHealth  = entry.type === 'pet' || entry.type === 'health' || entry.type === 'appointment';
-  const isCalendar     = isCalendarEntry(entry);
 
   const metaShopping = getShoppingMetadata(entry);
   const shoppingItems = useMemo(() => getSafeShoppingItems(entry), [entry]);

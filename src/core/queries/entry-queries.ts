@@ -1,5 +1,5 @@
 import type { TimelineEntry, EntryType } from '@/types';
-import { shouldShowOnSurface, isLongFormNote } from '../display/surface-resolver';
+import { shouldShowOnSurface } from '../display/surface-resolver.ts';
 
 export interface QueryFilter {
   type?: EntryType;
@@ -10,39 +10,6 @@ export interface QueryFilter {
   dateTo?: string;
 }
 
-const PURCHASE_TERMS = [
-  'compr',
-  'super',
-  'mercado',
-  'supermercado',
-  'feria',
-  'despensa',
-  'abarrote',
-  'hogar',
-  'casa',
-  'limpieza',
-  'detergente',
-  'papel higienico',
-  'papel higiénico',
-  'market',
-  'grocer',
-  'verdura',
-  'fruta',
-];
-
-const PET_TERMS = [
-  'mascota',
-  'perro',
-  'gato',
-  'vet',
-  'veterinario',
-  'vacuna',
-  'comida',
-  'alimento',
-  'correa',
-  'arena',
-];
-
 function normalizeText(value: string): string {
   return value
     .normalize('NFD')
@@ -50,13 +17,25 @@ function normalizeText(value: string): string {
     .toLowerCase();
 }
 
-function entryHaystack(entry: TimelineEntry): string {
-  return normalizeText([entry.title, entry.text, ...entry.tags].join(' '));
+function hasExplicitExpenseMetadata(entry: TimelineEntry): boolean {
+  const metadata = entry.metadata as Record<string, unknown> | null | undefined;
+  const direction = typeof metadata?.direction === 'string' ? normalizeText(metadata.direction) : '';
+  const kind = typeof metadata?.kind === 'string' ? normalizeText(metadata.kind) : '';
+  const status = typeof metadata?.status === 'string' ? normalizeText(metadata.status) : '';
+  return direction === 'expense' || kind === 'expense' || kind === 'payment' || status === 'paid';
 }
 
-function matchesAnyTerm(entry: TimelineEntry, terms: string[]): boolean {
-  const haystack = entryHaystack(entry);
-  return terms.some((term) => haystack.includes(normalizeText(term)));
+function hasExplicitExpenseTag(entry: TimelineEntry): boolean {
+  return entry.tags.some((tag) => {
+    const normalized = normalizeText(tag);
+    return normalized === 'payment' || normalized === 'expense' || normalized === 'purchase';
+  });
+}
+
+function isFinancialExpenseEntry(entry: TimelineEntry): boolean {
+  if (typeof entry.amount !== 'number' || Number.isNaN(entry.amount) || entry.amount <= 0) return false;
+  if (entry.type === 'payment') return true;
+  return hasExplicitExpenseTag(entry) || hasExplicitExpenseMetadata(entry);
 }
 
 export function queryEntries(
@@ -102,12 +81,7 @@ export function queryEntries(
 }
 
 export function getPurchaseEntries(entries: TimelineEntry[]): TimelineEntry[] {
-  return entries.filter((entry) => {
-    if (entry.type === 'shopping_list') return true;
-    if (entry.type === 'payment' && matchesAnyTerm(entry, PURCHASE_TERMS)) return true;
-    if (entry.type === 'task' && matchesAnyTerm(entry, PURCHASE_TERMS)) return true;
-    return false;
-  });
+  return entries.filter((entry) => shouldShowOnSurface(entry, 'purchases'));
 }
 
 export function getPaymentEntries(entries: TimelineEntry[]): TimelineEntry[] {
@@ -115,10 +89,7 @@ export function getPaymentEntries(entries: TimelineEntry[]): TimelineEntry[] {
 }
 
 export function getHealthEntries(entries: TimelineEntry[]): TimelineEntry[] {
-  // Type-based filter + long-form note guard: a research doc mis-typed as health should not appear here.
-  return entries.filter(
-    (entry) => (entry.type === 'health' || entry.type === 'appointment') && !isLongFormNote(entry),
-  );
+  return entries.filter((entry) => shouldShowOnSurface(entry, 'health'));
 }
 
 export function getPetEntries(entries: TimelineEntry[]): TimelineEntry[] {
@@ -128,7 +99,7 @@ export function getPetEntries(entries: TimelineEntry[]): TimelineEntry[] {
 }
 
 export function getNoteEntries(entries: TimelineEntry[]): TimelineEntry[] {
-  return entries.filter((entry) => entry.type === 'note');
+  return entries.filter((entry) => shouldShowOnSurface(entry, 'notes'));
 }
 
 export function getTodayEntries(entries: TimelineEntry[]): TimelineEntry[] {
@@ -145,10 +116,7 @@ export function getTotalAmount(entries: TimelineEntry[]): number {
 
 export function getTodaySpend(entries: TimelineEntry[]): number {
   return getTotalAmount(
-    getTodayEntries(entries).filter((entry) => {
-      const isMoneyEntry = entry.type === 'payment' || entry.type === 'pet' || matchesAnyTerm(entry, PURCHASE_TERMS);
-      return isMoneyEntry && typeof entry.amount === 'number';
-    })
+    getTodayEntries(entries).filter((entry) => isFinancialExpenseEntry(entry))
   );
 }
 

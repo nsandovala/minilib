@@ -179,6 +179,24 @@ function cleanEventLabel(segment: string): string {
   );
 }
 
+function isCalendarScaffoldingLabel(label: string): boolean {
+  if (!label) return true;
+  return /^(?:el\s+|la\s+)?(?:lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|hoy|mañana|manana)$/i.test(label.trim());
+}
+
+function stripCalendarScaffolding(text: string): string {
+  return text
+    .replace(/\b(?:hoy|mañana|manana)\b/gi, ' ')
+    .replace(/\b(?:el\s+)?(?:lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\b/gi, ' ')
+    .replace(/\b\d{1,2}\s+(?:de\s+)?(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|sept|octubre|nov|noviembre|dic|diciembre)\b/gi, ' ')
+    .replace(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/gi, ' ')
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/gi, ' ')
+    .replace(PREFIXED_TIME_PATTERN, ' ')
+    .replace(BARE_TIME_PATTERN, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function extractOrderedEvents(text: string): CalendarEventItem[] {
   const events: CalendarEventItem[] = [];
   const pattern = new RegExp(ORDERED_EVENT_PATTERN.source, ORDERED_EVENT_PATTERN.flags);
@@ -237,7 +255,11 @@ function extractSingleOrImplicitEvents(text: string): CalendarEventItem[] {
   const matches = extractTimeMatches(text);
   return matches.map((match, index) => {
     const nextStart = matches[index + 1]?.start ?? text.length;
-    const label = cleanEventLabel(text.slice(match.end, nextStart));
+    const trailingLabel = cleanEventLabel(text.slice(match.end, nextStart));
+    const fallbackLabel = cleanEventLabel(stripCalendarScaffolding(text.slice(0, match.start)));
+    const label = trailingLabel && !isCalendarScaffoldingLabel(trailingLabel)
+      ? trailingLabel
+      : fallbackLabel;
     return {
       order: index + 1,
       time: match.time,
@@ -298,10 +320,11 @@ export function parseCalendarEventInput(rawText: string, baseDate: Date = new Da
   const earliestTime = sortedEvents[0]?.time ?? null;
   const totalCount = expectedCount ?? (kind === 'multi_event' ? Math.max(events.length, 2) : 1);
   const shouldKeepExpectedCount = kind === 'multi_event' && expectedCount !== null && events.length < expectedCount;
+  const fallbackSingleTitle = cleanEventLabel(stripCalendarScaffolding(rawText));
 
   const title = kind === 'multi_event'
     ? formatCountTitle(totalCount)
-    : events[0]?.label || 'Evento';
+    : events[0]?.label || fallbackSingleTitle || 'Evento';
 
   return {
     matched: true,

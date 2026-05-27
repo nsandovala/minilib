@@ -227,7 +227,7 @@ test('note entry with a number does NOT show in payments', () => {
 
 // ─── Calendar surface ─────────────────────────────────────────────────────────
 
-test('calendar metadata entry shows in calendar and notes, NOT in purchases or pets', () => {
+test('calendar metadata entry shows in calendar, NOT in notes, purchases or pets', () => {
   const e = makeEntry({
     type: 'note',
     title: 'sábado reunión equipo y compras en el mercado',
@@ -241,12 +241,12 @@ test('calendar metadata entry shows in calendar and notes, NOT in purchases or p
     date: '2026-05-23',
   });
   assert.equal(shouldShowOnSurface(e, 'calendar'), true, 'must show in calendar');
-  assert.equal(shouldShowOnSurface(e, 'notes'), true, 'must show in notes');
+  assert.equal(shouldShowOnSurface(e, 'notes'), false, 'generic calendar entry must stay out of notes');
   assert.equal(shouldShowOnSurface(e, 'purchases'), false, 'must NOT show in purchases despite "mercado"');
   assert.equal(shouldShowOnSurface(e, 'pets'), false, 'must NOT show in pets');
   assert.equal(getPrimarySurface(e), 'calendar');
   const secondary = getSecondarySurfaces(e);
-  assert.ok(secondary.includes('notes'));
+  assert.ok(!secondary.includes('notes'));
   assert.ok(secondary.includes('home'), 'dated calendar entry should be in home secondary');
 });
 
@@ -275,6 +275,25 @@ test('health entry shows in health surface', () => {
   });
   assert.equal(shouldShowOnSurface(e, 'health'), true);
   assert.equal(getPrimarySurface(e), 'health');
+});
+
+test('pet medicine entry does NOT show in health surface', () => {
+  const e = makeEntry({
+    type: 'pet',
+    title: 'Pastilla Luna',
+    text: 'pastilla Luna lunes 9am',
+    date: '2026-06-01',
+    metadata: {
+      calendar: {
+        kind: 'single_event',
+        events: [{ order: 1, time: '09:00', label: 'Pastilla Luna' }],
+      },
+    },
+  });
+  assert.equal(shouldShowOnSurface(e, 'pets'), true);
+  assert.equal(shouldShowOnSurface(e, 'health'), false);
+  assert.equal(shouldShowOnSurface(e, 'calendar'), true);
+  assert.equal(getPrimarySurface(e), 'pets');
 });
 
 // ─── Shopping list / pets hardening ──────────────────────────────────────────

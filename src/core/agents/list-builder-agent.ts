@@ -1,6 +1,6 @@
 import type { ShoppingItem, ShoppingProgress } from '@/types';
-import { normalizeCLP } from '@/lib/money';
-import { hasExplicitListIntent, shouldBuildShoppingList, hasProjectIntent } from './parser-rules';
+import { normalizeCLP } from '../../lib/money.ts';
+import { hasExplicitListIntent, shouldBuildShoppingList, hasProjectIntent } from './parser-rules.ts';
 
 export interface ShoppingListBuildResult {
   listKind: 'shopping';
@@ -26,6 +26,10 @@ const INTRO_PATTERNS = [
   /\bcomprar\b/gi,
   /\bcompras\b/gi,
   /\bsupermercado\b/gi,
+  /\bminimarket\b/gi,
+  /\bferreter[ií]a\b/gi,
+  /\bdespensa\b/gi,
+  /\bfarmacia\b/gi,
   /\ben\s+el\s+super\b/gi,
   /\blista\s+de\b/gi,
 ];
@@ -44,6 +48,7 @@ function cleanShoppingIntro(text: string): string {
 
 const STORE_TYPE_PATTERNS: { pattern: RegExp; type: ShoppingListBuildResult['storeType'] }[] = [
   { pattern: /\b(supermercado|super|en\s+el\s+super|en\s+el\s+supermercado)\b/i, type: 'supermercado' },
+  { pattern: /\bminimarket\b/i, type: 'supermercado' },
   { pattern: /\bferia\b/i, type: 'feria' },
   { pattern: /\bfarmacia\b/i, type: 'farmacia' },
 ];
@@ -273,6 +278,28 @@ const ITEM_CATEGORY_MAP: Record<string, string> = {
   'alcohol gel': 'farmacia',
   'suero oral': 'farmacia',
 
+  // ferretería
+  tornillo: 'ferretería',
+  tornillos: 'ferretería',
+  perno: 'ferretería',
+  pernos: 'ferretería',
+  clavo: 'ferretería',
+  clavos: 'ferretería',
+  huincha: 'ferretería',
+  martillo: 'ferretería',
+  brocha: 'ferretería',
+  rodillo: 'ferretería',
+  pintura: 'ferretería',
+  cinta: 'ferretería',
+  aisladora: 'ferretería',
+  'cinta aisladora': 'ferretería',
+  ampolleta: 'ferretería',
+  ampolletas: 'ferretería',
+  pila: 'ferretería',
+  pilas: 'ferretería',
+  bateria: 'ferretería',
+  batería: 'ferretería',
+
   // mascotas
   correa: 'mascotas',
   collar: 'mascotas',
@@ -319,6 +346,15 @@ function splitAdjacentKnown(part: string): string[] {
   const words = part.split(/\s+/);
   if (words.length < 2 || words.length > 5) return [part];
   if (words.every((w) => classifyItemCategory(w) !== 'otros')) return words;
+
+  for (let splitAt = 1; splitAt < words.length; splitAt += 1) {
+    const left = words.slice(0, splitAt).join(' ');
+    const right = words.slice(splitAt).join(' ');
+    if (classifyItemCategory(left) !== 'otros' && classifyItemCategory(right) !== 'otros') {
+      return [left, right];
+    }
+  }
+
   return [part];
 }
 
@@ -338,6 +374,7 @@ const TAG_RULES = [
   { pattern: /\b(despensa|arroz|fideos|legumbres|aceite|harina|azucar|azúcar|huevos)\b/i, tag: 'despensa' },
   { pattern: /\b(casa|hogar)\b/i, tag: 'casa' },
   { pattern: /\b(bebida|bebidas|jugo|agua)\b/i, tag: 'bebestibles' },
+  { pattern: /\b(tornillos?|pernos?|clavos?|cinta\s+aisladora|pintura|ampolletas?|pilas?)\b/i, tag: 'ferretería' },
 ];
 
 function detectTags(items: string[]): string[] {
@@ -388,9 +425,9 @@ export function buildShoppingList(input: string): ShoppingListBuildResult | null
     .flatMap(splitAdjacentKnown);
 
   const storeFromRaw = detectStoreType(raw);
-  const hasStoreKeyword = storeFromRaw !== 'otro';
+  const hasStoreKeyword = /\b(supermercado|super|mercado|minimarket|feria|farmacia|ferreter[ií]a|despensa)\b/i.test(raw);
 
-  const storeNameSet = new Set(['supermercado', 'super', 'feria', 'farmacia']);
+  const storeNameSet = new Set(['supermercado', 'super', 'feria', 'farmacia', 'minimarket', 'ferretería', 'ferreteria', 'despensa']);
   const firstPartLower = parts[0]?.toLowerCase() ?? '';
   const isFirstPartStore = storeNameSet.has(firstPartLower);
 

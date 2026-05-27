@@ -1,4 +1,4 @@
-import { buildShoppingList, type ShoppingListBuildResult } from './list-builder-agent';
+import { buildShoppingList, type ShoppingListBuildResult } from './list-builder-agent.ts';
 
 export interface ExtractedTokens {
   rawText: string;
@@ -60,7 +60,7 @@ function getNextDayOfWeek(dayIndex: number): string {
 function extractTime(text: string): { time: string | null; cleaned: string } {
   // Prefix-based: "a las 9", "al 9am", "desde las 3pm"
   const match = text.match(
-    /(?:a\s+las?|al?|desde)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i
+    /\b(?:a\s+las?|a\s+la|al|desde)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i
   );
   if (match) {
     let raw = match[1].trim().toLowerCase();

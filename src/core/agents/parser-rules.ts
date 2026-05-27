@@ -1,5 +1,12 @@
 export type ListEntryType = 'shopping_list' | 'health' | 'pet';
 
+function normalizeIntentText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
 export function hasExplicitListIntent(text: string): boolean {
   return /\blista\b/i.test(text) || /[,;/]/.test(text) || /\n/.test(text) || /\s+y\s+/i.test(text);
 }
@@ -48,20 +55,40 @@ export function isLongFormNote(text: string): boolean {
  * The word "mascotas" alone as a category/topic does NOT qualify.
  */
 export function hasPetAction(text: string): boolean {
-  const lower = text.toLowerCase();
+  const lower = normalizeIntentText(text);
+  const hasPetNoun = /\b(mascota|mascotas|perro|perrita|perrito|perra|gato|gata|gatito|gatita|can|felino)\b/.test(lower);
+  const hasNamedPetContext = /\b(a|para)\s+(?:la\s+|el\s+)?([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)\b/.test(text);
   // Veterinary / medical — always concrete
   if (/\b(veterinario|veterinaria|\bvet\b|vacuna|vacunar|desparasit|pipeta|pulgas|garrapata)\b/.test(lower)) return true;
+  // Medication becomes pet-specific only when paired with explicit pet context or pet-like proper-name context
+  if (/\b(pastilla|remedio|medicamento|medicina|jarabe|dosis)\b/.test(lower) && (hasPetNoun || hasNamedPetContext)) return true;
   // Grooming / care with explicit animal reference
-  if (/\b(baño|bañar|corte\s+de\s+pelo|peluquer[ií]a)\b.{0,40}\b(perro|gato|mascota|can)\b/.test(lower)) return true;
-  if (/\b(perro|gato|mascota)\b.{0,30}\b(baño|bañar|corte|peluquer[ií]a|control)\b/.test(lower)) return true;
+  if (/\b(baño|bañar|corte\s+de\s+pelo|peluquer[ií]a)\b.{0,40}\b(perro|gato|gata|mascota|can)\b/.test(lower)) return true;
+  if (/\b(perro|gato|gata|mascota)\b.{0,30}\b(baño|bañar|corte|peluquer[ií]a|control)\b/.test(lower)) return true;
   // Food / supplies near an animal word
-  if (/\b(comida|alimento|croqueta|pienso)\b.{0,20}\b(perro|gato|mascota|can|felino)\b/.test(lower)) return true;
-  if (/\b(perro|gato|mascota)\b.{0,20}\b(comida|alimento|croqueta|correa|collar)\b/.test(lower)) return true;
+  if (/\b(comida|alimento|croqueta|pienso)\b.{0,20}\b(perro|gato|gata|mascota|can|felino)\b/.test(lower)) return true;
+  if (/\b(perro|gato|gata|mascota)\b.{0,20}\b(comida|alimento|croqueta|correa|collar)\b/.test(lower)) return true;
   // Cat litter
-  if (/\b(arena|arenero)\b.{0,15}\bgato\b/.test(lower)) return true;
-  if (/\bgato\b.{0,15}\b(arena|arenero)\b/.test(lower)) return true;
+  if (/\b(arena|arenero)\b.{0,15}\b(gato|gata)\b/.test(lower)) return true;
+  if (/\b(gato|gata)\b.{0,15}\b(arena|arenero)\b/.test(lower)) return true;
   // llevar / ir + vet or animal
-  if (/\b(llevar|ir)\b.{0,40}\b(veterinario|vet|perro|gato|mascota)\b/.test(lower)) return true;
+  if (/\b(llevar|ir|dar)\b.{0,40}\b(veterinario|vet|perro|gato|gata|mascota)\b/.test(lower)) return true;
+  return false;
+}
+
+export function hasHealthIntent(text: string): boolean {
+  const lower = normalizeIntentText(text);
+  if (hasPetAction(text)) return false;
+
+  if (/\b(doctor|doctora|medico|medica|dentista|kine|kinesiologo|kinesiologa|terapia|consulta|control medico|cita medica|examen|clinica|hospital)\b/.test(lower)) {
+    return true;
+  }
+
+  const hasMedicineWord = /\b(remedio|medicamento|medicina|pastilla|jarabe|dosis|vitamina|insulina|comprimido|inyeccion)\b/.test(lower);
+  const hasHumanCareVerb = /\b(tomar|ir\s+al?|ir\s+a\s+la|pedir|agendar|hacerme|hacer|comprar|buscar|retirar|controlar)\b/.test(lower);
+  const hasHumanBodySignal = /\b(fiebre|dolor|presion|temperatura|sintoma|malestar|cuerpo|cabeza|garganta)\b/.test(lower);
+
+  if (hasMedicineWord && (hasHumanCareVerb || hasHumanBodySignal)) return true;
   return false;
 }
 
@@ -69,7 +96,14 @@ export function hasPetAction(text: string): boolean {
  * True when text signals intent to buy / shop.
  */
 export function hasShoppingIntent(text: string): boolean {
-  return /\b(comprar|lista\s+(?:de\s+)?(?:compras?|super(?:mercado)?)|supermercado|\bferia\b|ingredientes)\b/i.test(text);
+  if (/\b(modulo|m[oó]dulo|flujo|categor[ií]a|investigaci[oó]n|an[aá]lisis)\b/i.test(text)) return false;
+  return /\b(comprar|compras?|lista\s+(?:de\s+)?(?:compras?|super(?:mercado)?|super)|compras?\s+del\s+super|supermercado|super|minimarket|farmacia|ferreter[ií]a|despensa|\bferia\b|ingredientes)\b/i.test(text);
+}
+
+export function hasExpensePurchaseIntent(text: string): boolean {
+  const lower = normalizeIntentText(text);
+  if (hasPetAction(text)) return false;
+  return /\b(comprar|compra|compre|compre\b|compr[eé]|gaste|gaste\b|gast[eé])\b/.test(lower);
 }
 
 /**

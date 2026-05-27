@@ -139,8 +139,7 @@ const INPUT_CONTAINER_STYLE: React.CSSProperties = {
   position: 'relative',
   flex: 1,
   minWidth: 0,
-  height: '46px',
-  overflow: 'hidden',
+  minHeight: '46px',
 };
 
 const HIGHLIGHT_STYLE: React.CSSProperties = {
@@ -150,9 +149,9 @@ const HIGHLIGHT_STYLE: React.CSSProperties = {
   zIndex: 1,
   padding: '12px 10px',
   ...INPUT_FONT_STYLE,
-  whiteSpace: 'nowrap',
-  overflowX: 'auto',
-  overflowY: 'hidden',
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+  overflow: 'hidden',
   msOverflowStyle: 'none',
   scrollbarWidth: 'none',
 };
@@ -161,7 +160,7 @@ const REAL_INPUT_STYLE: React.CSSProperties = {
   position: 'relative',
   zIndex: 2,
   width: '100%',
-  height: '100%',
+  minHeight: '46px',
   background: 'transparent',
   border: 'none',
   padding: '12px 10px',
@@ -169,11 +168,13 @@ const REAL_INPUT_STYLE: React.CSSProperties = {
   color: 'transparent',
   caretColor: 'var(--text-primary)',
   ...INPUT_FONT_STYLE,
-  whiteSpace: 'nowrap',
-  overflowX: 'auto',
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
   overflowY: 'hidden',
   msOverflowStyle: 'none',
   scrollbarWidth: 'none',
+  resize: 'none',
+  display: 'block',
 };
 
 export default function UniversalInput({ onEntryAdded, weatherHint, source }: UniversalInputProps) {
@@ -187,7 +188,7 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
   const [savedType, setSavedType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isIOS, setIsIOS] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const submittingRef = useRef(false);
 
@@ -216,8 +217,15 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
     setError(null);
   }, [text]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+    textarea.style.height = '46px';
+    const nextHeight = Math.min(Math.max(textarea.scrollHeight, 46), 120);
+    textarea.style.height = `${nextHeight}px`;
+  }, [text]);
+
+  const submitEntry = async () => {
     if (!text.trim() || saving || submittingRef.current) return;
     submittingRef.current = true;
 
@@ -264,6 +272,18 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitEntry();
+  };
+
+  const handleComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      void submitEntry();
+    }
+  };
+
   return (
     <div style={{ padding: '0 20px' }}>
       <form onSubmit={handleSubmit}>
@@ -300,14 +320,15 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
             )}
 
             {/* Layer 2 — real input */}
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
+              onKeyDown={handleComposerKeyDown}
               onScroll={(e) => {
                 if (highlightRef.current) {
                   highlightRef.current.scrollLeft = e.currentTarget.scrollLeft;
+                  highlightRef.current.scrollTop = e.currentTarget.scrollTop;
                 }
               }}
               placeholder={
@@ -320,6 +341,8 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
                 color: isIOS ? 'var(--text-primary)' : 'transparent',
               }}
               aria-label="Nueva entrada"
+              rows={1}
+              enterKeyHint="done"
             />
           </div>
 

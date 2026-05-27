@@ -71,6 +71,18 @@ export default function BottomNav() {
   const pathname = usePathname();
   const { isLoaded, isSignedIn } = useAuth();
 
+  const handleNavActivate = () => {
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      (activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        activeElement.isContentEditable)
+    ) {
+      activeElement.blur();
+    }
+  };
+
   if (!isLoaded) return null;
 
   if (!isSignedIn && (pathname === '/' || pathname.startsWith('/sign-in') || pathname.startsWith('/sign-up'))) {
@@ -80,7 +92,13 @@ export default function BottomNav() {
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-[100]"
-      style={{ padding: '0 12px 20px' }}
+      style={{
+        padding: '0 12px 20px',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+        touchAction: 'manipulation',
+      }}
     >
       <div
         style={{
@@ -94,6 +112,7 @@ export default function BottomNav() {
           justifyContent: 'space-around',
           alignItems: 'center',
           boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+          width: 'min(100%, 520px)',
         }}
       >
         {navItems.map((item) => {
@@ -102,6 +121,8 @@ export default function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
+              onClickCapture={handleNavActivate}
+              aria-label={item.href === '/' ? 'Home' : item.href.replace('/', '')}
               style={{
                 textDecoration: 'none',
                 display: 'flex',
@@ -118,6 +139,8 @@ export default function BottomNav() {
                   : 'transparent',
                 transition: 'color 0.15s ease, background 0.15s ease',
                 flex: 1,
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent',
               }}
             >
               {item.icon}
