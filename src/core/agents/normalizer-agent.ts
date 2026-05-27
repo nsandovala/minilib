@@ -9,11 +9,14 @@ import {
   hasShoppingIntent,
   hasPaymentIntent,
   hasExpensePurchaseIntent,
+  hasPassiveExpenseIntent,
+  hasIncomeIntent,
+  hasConceptualNoteIntent,
 } from './parser-rules.ts';
 
 const TYPE_PATTERNS: Record<EntryType, RegExp[]> = {
   payment: [
-    /\b(pagar|pago|abonar|cobrar|factura|cuenta|internet|luz|agua|gas|arriendo|hipoteca|tarjeta|prestamo|préstamo)\b/i,
+    /\b(pagar|pago|abonar|cobrar|factura|cuenta|internet|luz|agua|gas|arriendo|hipoteca|tarjeta|prestamo|préstamo|ingreso|me pagaron|pagaron|venta|deposito|depósito)\b/i,
   ],
   pet: [
     /\b(mascota|perro|gato|veterinario|vet|vacuna|comida\s+(para|del?)|correa|areno|alimento\s+(para|del?))\b/i,
@@ -58,6 +61,11 @@ export function classifyWithConfidence(tokens: ExtractedTokens): ClassificationR
   }
 
   // Payment — requires both a keyword AND explicit financial intent
+  if (tokens.amount !== null && hasIncomeIntent(text)) {
+    return { type: 'payment', confidence: 0.9, reasons: ['income-intent'] };
+  }
+
+  // Payment — requires both a keyword AND explicit financial intent
   if (TYPE_PATTERNS.payment.some((p) => p.test(lower)) && hasPaymentIntent(text)) {
     return { type: 'payment', confidence: 0.87, reasons: ['payment-intent'] };
   }
@@ -70,6 +78,11 @@ export function classifyWithConfidence(tokens: ExtractedTokens): ClassificationR
   // Purchase / expense movement — amount + explicit buy wording, but not a list
   if (tokens.amount !== null && hasExpensePurchaseIntent(text) && !tokens.isListLike) {
     return { type: 'payment', confidence: 0.84, reasons: ['purchase-expense-amount'] };
+  }
+
+  // Short expense shorthand like "tabaco 15000"
+  if (tokens.amount !== null && hasPassiveExpenseIntent(text) && !tokens.isListLike) {
+    return { type: 'payment', confidence: 0.8, reasons: ['passive-expense-amount'] };
   }
 
   // Shopping / pet list — only when there is actual shopping intent
@@ -112,6 +125,10 @@ export function classifyWithConfidence(tokens: ExtractedTokens): ClassificationR
     return { type: 'reminder', confidence: 0.77, reasons: ['reminder-keywords'] };
   }
 
+  if (hasConceptualNoteIntent(text)) {
+    return { type: 'note', confidence: 0.88, reasons: ['conceptual-note-intent'] };
+  }
+
   // Task
   if (TYPE_PATTERNS.task.some((p) => p.test(lower))) {
     return { type: 'task', confidence: 0.75, reasons: ['task-keywords'] };
@@ -143,7 +160,9 @@ function buildTitle(tokens: ExtractedTokens, type: EntryType, calendarMetadata?:
     return 'Lista de compras';
   }
 
-  const base = tokens.cleanedText.trim() || tokens.rawText.trim();
+  const base = (tokens.cleanedText.trim() || tokens.rawText.trim())
+    .replace(/\b(?:para|por|en|de|con|a|al|el|la)\s*$/i, '')
+    .trim();
   if (!base) return tokens.rawText.trim();
 
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -160,7 +179,13 @@ function buildTitle(tokens: ExtractedTokens, type: EntryType, calendarMetadata?:
   if (type === 'shopping_list') {
     return cap(base);
   }
-  if (type === 'payment' && !/\b(pagar?|abonar|cobrar|comprar|compra|compre|compr[eé]|gaste|gast[eé])\b/i.test(base)) {
+  if (
+    type === 'payment'
+    && !hasPaymentIntent(base)
+    && !hasIncomeIntent(base)
+    && !hasExpensePurchaseIntent(base)
+    && !hasPassiveExpenseIntent(base)
+  ) {
     return `Pagar ${base}`;
   }
   return cap(base);
@@ -170,6 +195,10 @@ function buildTags(rawText: string, type: EntryType): string[] {
   const tags: string[] = [type];
   const lower = rawText.toLowerCase();
 
+  if (type === 'payment') {
+    tags.push(hasIncomeIntent(rawText) ? 'income' : 'expense');
+  }
+
   if (/\b(urgente|urgencia|importante|prioridad|ya|inmediato)\b/i.test(lower)) {
     tags.push('urgente');
   }
@@ -178,6 +207,13 @@ function buildTags(rawText: string, type: EntryType): string[] {
   }
 
   return tags;
+}
+
+function buildPaymentMetadata(rawText: string, type: EntryType): Record<string, unknown> | undefined {
+  if (type !== 'payment') return undefined;
+  return {
+    direction: hasIncomeIntent(rawText) ? 'income' : 'expense',
+  };
 }
 
 function buildShoppingMetadata(tokens: ExtractedTokens): ShoppingMetadata | undefined {
@@ -219,9 +255,15 @@ export function normalizeEntry(tokens: ExtractedTokens, source?: string): Parsed
       ? shoppingMetadata.progress.totalEstimated
       : undefined;
 
+  const paymentMetadata = buildPaymentMetadata(tokens.rawText, type);
+
   const metadata = shoppingMetadata && calendarMetadata
     ? { ...shoppingMetadata, ...calendarMetadata }
-    : shoppingMetadata ?? calendarMetadata ?? undefined;
+    : shoppingMetadata ?? calendarMetadata ?? paymentMetadata ?? undefined;
+
+  if (paymentMetadata && metadata && metadata !== paymentMetadata) {
+    Object.assign(metadata, paymentMetadata);
+  }
 
   return {
     text: tokens.rawText,

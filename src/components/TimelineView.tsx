@@ -35,6 +35,7 @@ import {
   shouldShowCorrectionHint,
   shouldShowOriginalText,
 } from '@/core/display/display-rules';
+import { getPrimarySurface } from '@/core/display/surface-resolver';
 
 interface TimelineViewProps {
   entries: TimelineEntry[];
@@ -605,13 +606,20 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
   const isPayment      = entry.type === 'payment';
   const isPetOrHealth  = entry.type === 'pet' || entry.type === 'health' || entry.type === 'appointment';
   const isCalendar     = isCalendarEntry(entry);
+  const resolvedPrimarySurface = getPrimarySurface(entry);
   const displayType = currentSurface === 'pets' && isPetOrHealth && entry.type === 'pet'
     ? 'mascota'
     : currentSurface === 'health' && (entry.type === 'health' || entry.type === 'appointment')
       ? 'salud'
       : currentSurface === 'purchases' && isShoppingList
         ? 'lista'
-        : isCalendar
+        : resolvedPrimarySurface === 'pets'
+          ? 'mascota'
+          : resolvedPrimarySurface === 'health'
+            ? 'salud'
+            : resolvedPrimarySurface === 'purchases'
+              ? 'lista'
+              : resolvedPrimarySurface === 'calendar' && isCalendar
           ? 'calendario'
           : (getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry));
   const agentConfig      = getAgentForType(entry.type);

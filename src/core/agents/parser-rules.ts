@@ -57,14 +57,16 @@ export function isLongFormNote(text: string): boolean {
 export function hasPetAction(text: string): boolean {
   const lower = normalizeIntentText(text);
   const hasPetNoun = /\b(mascota|mascotas|perro|perrita|perrito|perra|gato|gata|gatito|gatita|can|felino)\b/.test(lower);
+  const hasKnownPetName = /\b(luna|rocky|saly|thor|max|firulais|michi|michi[sz])\b/.test(lower);
   const hasNamedPetContext = /\b(a|para)\s+(?:la\s+|el\s+)?([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)\b/.test(text);
   // Veterinary / medical — always concrete
   if (/\b(veterinario|veterinaria|\bvet\b|vacuna|vacunar|desparasit|pipeta|pulgas|garrapata)\b/.test(lower)) return true;
   // Medication becomes pet-specific only when paired with explicit pet context or pet-like proper-name context
-  if (/\b(pastilla|remedio|medicamento|medicina|jarabe|dosis)\b/.test(lower) && (hasPetNoun || hasNamedPetContext)) return true;
+  if (/\b(pastilla|remedio|medicamento|medicina|jarabe|dosis)\b/.test(lower) && (hasPetNoun || hasNamedPetContext || hasKnownPetName)) return true;
   // Grooming / care with explicit animal reference
   if (/\b(baño|bañar|corte\s+de\s+pelo|peluquer[ií]a)\b.{0,40}\b(perro|gato|gata|mascota|can)\b/.test(lower)) return true;
   if (/\b(perro|gato|gata|mascota)\b.{0,30}\b(baño|bañar|corte|peluquer[ií]a|control)\b/.test(lower)) return true;
+  if (/\b(banar|bañar|bano|baño|cortar\s+unas|cortar\s+uñas|corte\s+de\s+pelo|peluqueria|peluquería)\b/.test(lower) && (hasPetNoun || hasNamedPetContext || hasKnownPetName)) return true;
   // Food / supplies near an animal word
   if (/\b(comida|alimento|croqueta|pienso)\b.{0,20}\b(perro|gato|gata|mascota|can|felino)\b/.test(lower)) return true;
   if (/\b(perro|gato|gata|mascota)\b.{0,20}\b(comida|alimento|croqueta|correa|collar)\b/.test(lower)) return true;
@@ -74,6 +76,21 @@ export function hasPetAction(text: string): boolean {
   // llevar / ir + vet or animal
   if (/\b(llevar|ir|dar)\b.{0,40}\b(veterinario|vet|perro|gato|gata|mascota)\b/.test(lower)) return true;
   return false;
+}
+
+export function hasIncomeIntent(text: string): boolean {
+  const lower = normalizeIntentText(text);
+  return /\b(me pagaron|nos pagaron|pagaron|ingreso|sueldo|venta|deposito|depositaron|transferencia recibida|entr[oó]|recibi|recib[íi])\b/.test(lower);
+}
+
+export function hasConceptualNoteIntent(text: string): boolean {
+  const lower = normalizeIntentText(text);
+  return /\b(idea|analizar|analisis|mejorar|habilitar|investigar|investigacion|posibilidad|integracion|herramientas|futuro|redisenar|rediseñar|implementar|mas adelante|informe|concepto|documento|modulo|ux|roadmap|backlog)\b/.test(lower);
+}
+
+export function hasPassiveExpenseIntent(text: string): boolean {
+  const lower = normalizeIntentText(text);
+  return /\b(tabaco|cigarro|cigarros|bebida|bebidas|cerveza|bencina|peaje)\b/.test(lower);
 }
 
 export function hasHealthIntent(text: string): boolean {
@@ -97,7 +114,7 @@ export function hasHealthIntent(text: string): boolean {
  */
 export function hasShoppingIntent(text: string): boolean {
   if (/\b(modulo|m[oó]dulo|flujo|categor[ií]a|investigaci[oó]n|an[aá]lisis)\b/i.test(text)) return false;
-  return /\b(comprar|compras?|lista\s+(?:de\s+)?(?:compras?|super(?:mercado)?|super)|compras?\s+del\s+super|supermercado|super|minimarket|farmacia|ferreter[ií]a|despensa|\bferia\b|ingredientes)\b/i.test(text);
+  return /\b(comprar|compras?|lista\s+(?:de\s+)?(?:compras?|super(?:mercado)?|super)|compras?\s+del\s+super|supermercado|super|minimarket|almac[eé]n|feria|mercado|farmacia|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|despensa|\bingredientes\b)\b/i.test(text);
 }
 
 export function hasExpensePurchaseIntent(text: string): boolean {
@@ -120,7 +137,7 @@ export function hasPaymentIntent(text: string): boolean {
  * Used as a negative guard so project/idea notes are never classified as shopping lists.
  */
 export function hasProjectIntent(text: string): boolean {
-  if (/\b(habilitar|implementar|redise[ñn]ar|migrar|desarrollar|optimizar|sketchnoting|roadmap|backlog|sprint|ingests?)\b/i.test(text)) return true;
+  if (/\b(habilitar|implementar|redise[ñn]ar|migrar|desarrollar|optimizar|sketchnoting|roadmap|backlog|sprint|ingests?|analizar|mejorar|investigar|integraci[oó]n|herramientas|futuro|informe|idea|concepto)\b/i.test(text)) return true;
   if (/\b(gmail|github|figma|notion|jira|asana|trello|dropbox|drive|photos|slack|linear|confluence)\b/i.test(text)) return true;
   return false;
 }

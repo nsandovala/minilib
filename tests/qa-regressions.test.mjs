@@ -8,6 +8,7 @@ import {
   shouldShowOnSurface,
 } from '../src/core/display/surface-resolver.ts';
 import { getTodaySpend } from '../src/core/queries/entry-queries.ts';
+import { shouldSubmitFromComposerKey } from '../src/components/UniversalInput.shortcuts.ts';
 
 let seq = 0;
 
@@ -200,6 +201,26 @@ test('Luna veterinario viernes mantiene pets como superficie primaria', () => {
   assert.equal(shouldShowOnSurface(entry, 'calendar'), true);
 });
 
+test('bañar a Rocky domingo mantiene pets como superficie primaria', () => {
+  const parsed = parseEntry('bañar a Rocky domingo');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'pet');
+  assert.equal(getPrimarySurface(entry), 'pets');
+  assert.equal(shouldShowOnSurface(entry, 'pets'), true);
+  assert.equal(shouldShowOnSurface(entry, 'calendar'), true);
+});
+
+test('cortar uñas a Luna sábado mantiene pets como superficie primaria', () => {
+  const parsed = parseEntry('cortar uñas a Luna sábado');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'pet');
+  assert.equal(getPrimarySurface(entry), 'pets');
+  assert.equal(shouldShowOnSurface(entry, 'pets'), true);
+  assert.equal(shouldShowOnSurface(entry, 'calendar'), true);
+});
+
 test('doctor lunes 9:30 queda en health y preserva título útil', () => {
   const parsed = parseEntry('doctor lunes 9:30');
   const entry = toTimelineEntry(parsed);
@@ -235,6 +256,26 @@ test('terapia kine martes a las 17:00 queda en health con calendario secundario'
   assert.match(parsed.title.toLowerCase(), /(terapia|kine)/);
 });
 
+test('médico sábado 15:00 queda en health y no cae en calendario principal', () => {
+  const parsed = parseEntry('médico sábado 15:00');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(getPrimarySurface(entry), 'health');
+  assert.equal(shouldShowOnSurface(entry, 'health'), true);
+  assert.equal(shouldShowOnSurface(entry, 'calendar'), true);
+  assert.match(parsed.title.toLowerCase(), /medico|médico/);
+});
+
+test('rapia kine martes a las 17:00 sigue entrando como health por keyword fuerte', () => {
+  const parsed = parseEntry('rapia kine martes a las 17:00');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(getPrimarySurface(entry), 'health');
+  assert.equal(shouldShowOnSurface(entry, 'health'), true);
+  assert.equal(shouldShowOnSurface(entry, 'calendar'), true);
+  assert.match(parsed.title.toLowerCase(), /kine/);
+});
+
 test('evento genérico con fecha queda en calendar y no usa título vacío', () => {
   const parsed = parseEntry('partido con amigos miércoles 19:30');
   const entry = toTimelineEntry(parsed);
@@ -249,6 +290,63 @@ test('evento genérico con fecha queda en calendar y no usa título vacío', () 
   assert.match(parsed.title.toLowerCase(), /partido con amigos/);
 });
 
+test('compra en minimarket clasifica como purchases y limpia encabezado basura', () => {
+  const parsed = parseEntry('Compra en Minimarket, bebidas, pan, salame, mantequilla');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'shopping_list');
+  assert.equal(getPrimarySurface(entry), 'purchases');
+  assert.deepEqual(
+    parsed.metadata?.items?.map((item) => item.label),
+    ['bebidas', 'pan', 'salame', 'mantequilla'],
+  );
+});
+
+test('comprar en la feria limpia "en la feria" y conserva sólo productos', () => {
+  const parsed = parseEntry('Comprar en la feria, papas, tomate, lechuga, cebolla, uva, manzana, pera');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'shopping_list');
+  assert.equal(getPrimarySurface(entry), 'purchases');
+  assert.deepEqual(
+    parsed.metadata?.items?.map((item) => item.label),
+    ['papas', 'tomate', 'lechuga', 'cebolla', 'uva', 'manzana', 'pera'],
+  );
+});
+
+test('compras farmacia limpia conectores y cola temporal', () => {
+  const parsed = parseEntry('Compras farmacia, cepillo de dientes, pregabalina, melena de león para el jueves');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'shopping_list');
+  assert.equal(getPrimarySurface(entry), 'purchases');
+  assert.equal(parsed.date !== undefined, true);
+  assert.deepEqual(
+    parsed.metadata?.items?.map((item) => item.label),
+    ['cepillo de dientes', 'pregabalina', 'melena de león'],
+  );
+});
+
+test('helado para mañana no se fuerza como shopping_list', () => {
+  const parsed = parseEntry('helado para mañana');
+  const entry = toTimelineEntry(parsed);
+
+  assert.notEqual(parsed.type, 'shopping_list');
+  assert.notEqual(getPrimarySurface(entry), 'purchases');
+});
+
+test('pasar al minimarket por pan y bebida crea compra coherente con items limpios', () => {
+  const parsed = parseEntry('pasar al minimarket por pan y bebida');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'shopping_list');
+  assert.equal(getPrimarySurface(entry), 'purchases');
+  assert.deepEqual(
+    parsed.metadata?.items?.map((item) => item.label),
+    ['pan', 'bebida'],
+  );
+});
+
 test('idea de producto sigue siendo note y no contamina surfaces de dominio', () => {
   const parsed = parseEntry('Drive, Gmail, Photos, Notion, GitHub, herramientas para poder conectar con Liev');
   const entry = toTimelineEntry(parsed);
@@ -260,6 +358,82 @@ test('idea de producto sigue siendo note y no contamina surfaces de dominio', ()
   assert.equal(shouldShowOnSurface(entry, 'health'), false);
   assert.equal(shouldShowOnSurface(entry, 'pets'), false);
   assert.equal(shouldShowOnSurface(entry, 'calendar'), false);
+});
+
+test('Idea: Companion Pet para futuro sigue siendo note', () => {
+  const parsed = parseEntry('Idea: Companion Pet para futuro');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'note');
+  assert.equal(getPrimarySurface(entry), 'notes');
+  assert.equal(shouldShowOnSurface(entry, 'pets'), false);
+});
+
+test('buscar información sobre mascotas para informe queda como nota conceptual', () => {
+  const parsed = parseEntry('buscar información sobre mascotas para informe');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'note');
+  assert.equal(getPrimarySurface(entry), 'notes');
+  assert.equal(shouldShowOnSurface(entry, 'pets'), false);
+});
+
+test('texto largo conceptual con salud/mascotas/compras/pagos/calendario sigue siendo note', () => {
+  const parsed = parseEntry([
+    'Analizar si Liev debería tener integración con calendario externo.',
+    'La idea considera salud, mascotas, compras y pagos como conceptos del sistema.',
+    'Esto es un informe conceptual para futuro, no una acción cotidiana concreta.',
+  ].join(' '));
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'note');
+  assert.equal(getPrimarySurface(entry), 'notes');
+  assert.equal(shouldShowOnSurface(entry, 'calendar'), false);
+  assert.equal(shouldShowOnSurface(entry, 'pets'), false);
+  assert.equal(shouldShowOnSurface(entry, 'health'), false);
+  assert.equal(shouldShowOnSurface(entry, 'purchases'), false);
+});
+
+test('me pagaron 250000 queda como ingreso financiero', () => {
+  const parsed = parseEntry('me pagaron 250000');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'payment');
+  assert.equal(parsed.amount, 250000);
+  assert.equal(getPrimarySurface(entry), 'payments');
+  assert.equal(entry.tags.includes('income'), true);
+  assert.equal(entry.metadata?.direction, 'income');
+  assert.equal(getTodaySpend([entry]), 0);
+});
+
+test('ingreso venta hamburguesas 45000 queda como ingreso financiero', () => {
+  const parsed = parseEntry('ingreso venta hamburguesas 45000');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'payment');
+  assert.equal(parsed.amount, 45000);
+  assert.equal(getPrimarySurface(entry), 'payments');
+  assert.equal(entry.tags.includes('income'), true);
+  assert.equal(getTodaySpend([entry]), 0);
+});
+
+test('tabaco 15000 queda como gasto y no como nota genérica', () => {
+  const parsed = parseEntry('tabaco 15000');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(parsed.type, 'payment');
+  assert.equal(parsed.amount, 15000);
+  assert.equal(getPrimarySurface(entry), 'payments');
+  assert.equal(entry.tags.includes('expense'), true);
+});
+
+test('multi-evento conserva kind multi_event cuando ya hay soporte', () => {
+  const parsed = parseEntry('domingo 2 eventos primero 17:30 partido segundo 21:30 cine');
+  const entry = toTimelineEntry(parsed);
+
+  assert.equal(getPrimarySurface(entry), 'calendar');
+  assert.equal(parsed.metadata?.calendar?.kind, 'multi_event');
+  assert.equal(parsed.metadata?.calendar?.events?.length, 2);
 });
 
 test('getTodaySpend no cuenta nota o tarea genérica con monto', () => {
@@ -318,6 +492,15 @@ test('shopping_list sin estado pagado no infla getTodaySpend', () => {
   const parsed = parseEntry('supermercado leche pan');
   const spend = getTodaySpend([toTimelineEntry(parsed)]);
   assert.equal(spend, 0);
+});
+
+test('enter solo no activa submit en el composer', () => {
+  assert.equal(shouldSubmitFromComposerKey({ key: 'Enter', metaKey: false, ctrlKey: false }), false);
+});
+
+test('cmd o ctrl + enter sí activa submit en el composer', () => {
+  assert.equal(shouldSubmitFromComposerKey({ key: 'Enter', metaKey: true, ctrlKey: false }), true);
+  assert.equal(shouldSubmitFromComposerKey({ key: 'Enter', metaKey: false, ctrlKey: true }), true);
 });
 
 test('calendar metadata no bloquea purchases, pets ni health cuando el dominio es más fuerte', () => {

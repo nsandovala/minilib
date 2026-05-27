@@ -25,6 +25,13 @@ function hasExplicitExpenseMetadata(entry: TimelineEntry): boolean {
   return direction === 'expense' || kind === 'expense' || kind === 'payment' || status === 'paid';
 }
 
+function hasExplicitIncomeMetadata(entry: TimelineEntry): boolean {
+  const metadata = entry.metadata as Record<string, unknown> | null | undefined;
+  const direction = typeof metadata?.direction === 'string' ? normalizeText(metadata.direction) : '';
+  const kind = typeof metadata?.kind === 'string' ? normalizeText(metadata.kind) : '';
+  return direction === 'income' || kind === 'income';
+}
+
 function hasExplicitExpenseTag(entry: TimelineEntry): boolean {
   return entry.tags.some((tag) => {
     const normalized = normalizeText(tag);
@@ -32,9 +39,18 @@ function hasExplicitExpenseTag(entry: TimelineEntry): boolean {
   });
 }
 
+function hasExplicitIncomeTag(entry: TimelineEntry): boolean {
+  return entry.tags.some((tag) => normalizeText(tag) === 'income');
+}
+
+function isFinancialIncomeEntry(entry: TimelineEntry): boolean {
+  if (typeof entry.amount !== 'number' || Number.isNaN(entry.amount) || entry.amount <= 0) return false;
+  return hasExplicitIncomeTag(entry) || hasExplicitIncomeMetadata(entry);
+}
+
 function isFinancialExpenseEntry(entry: TimelineEntry): boolean {
   if (typeof entry.amount !== 'number' || Number.isNaN(entry.amount) || entry.amount <= 0) return false;
-  if (entry.type === 'payment') return true;
+  if (entry.type === 'payment') return !isFinancialIncomeEntry(entry);
   return hasExplicitExpenseTag(entry) || hasExplicitExpenseMetadata(entry);
 }
 

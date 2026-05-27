@@ -15,11 +15,15 @@ export interface ShoppingListBuildResult {
    ────────────────────────────────────────── */
 
 const INTRO_PATTERNS = [
+  /\bcompra\s+en\s+(?:el\s+|la\s+)?(?:super(?:mercado)?|mercado|minimarket|feria|farmacia|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\b/gi,
+  /\bcomprar\s+en\s+(?:el\s+|la\s+)?(?:super(?:mercado)?|mercado|minimarket|feria|farmacia|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\b/gi,
   /\bcomprar\s+en\s+(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
   /\bcompras\s+(?:para\s+)?(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
+  /\bcompras\s+(?:en\s+)?(?:la\s+)?(?:feria|farmacia|minimarket|super(?:mercado)?|mercado|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\b/gi,
   /\blista\s+(?:de\s+)?(?:compras|supermercado|super)\b/gi,
   /\blista\s+supermercado\b/gi,
   /\bnecesito\s+(?:comprar|traer)\b/gi,
+  /\bpasar\s+al\s+(?:super(?:mercado)?|mercado|minimarket|almac[eé]n|farmacia|feria|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a)\s+por\b/gi,
   /\bpasar\s+al\s+(?:super(?:mercado)?|mercado)\s+por\b/gi,
   /\btraer\s+(?:de\s+)?(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
   /\bir\s+a\s+(?:comprar|el\s+super|el\s+mercado)\b/gi,
@@ -30,6 +34,11 @@ const INTRO_PATTERNS = [
   /\bferreter[ií]a\b/gi,
   /\bdespensa\b/gi,
   /\bfarmacia\b/gi,
+  /\bverduler[ií]a\b/gi,
+  /\bcarnicer[ií]a\b/gi,
+  /\bpanader[ií]a\b/gi,
+  /\btabaquer[ií]a\b/gi,
+  /\balmac[eé]n\b/gi,
   /\ben\s+el\s+super\b/gi,
   /\blista\s+de\b/gi,
 ];
@@ -70,6 +79,36 @@ function normalizeListItem(item: string): string {
     .replace(/[,\.\s]+$/, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+const NOISE_ITEM_PATTERNS = [
+  /^(?:en\s+la\s+feria|en\s+(?:el\s+|la\s+)?(?:super(?:mercado)?|mercado|minimarket|farmacia|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa))$/i,
+  /^(?:compra\s+en|comprar\s+en|compras?\s+en|compras?)$/i,
+  /^(?:para|por|en|de|con|a|al|el|la|los|las|un|una|del)$/i,
+];
+
+function stripTemporalTail(label: string): string {
+  return label
+    .replace(/\s+\bpara\s+(?:el\s+|la\s+)?(?:hoy|mañana|manana|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\b.*$/i, '')
+    .replace(/\s+\b(?:el\s+|la\s+)?(?:hoy|mañana|manana|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\b.*$/i, '')
+    .replace(/\s+\bpara(?:\s+(?:el|la))?\s*$/i, '')
+    .trim();
+}
+
+function sanitizeItemLabel(item: string): string {
+  let cleaned = normalizeListItem(item);
+  cleaned = cleaned.replace(/^(?:compra\s+en|comprar\s+en|compras?\s+en)\s+/i, '');
+  cleaned = cleaned.replace(/^(?:pasar\s+al?\s+)?(?:super(?:mercado)?|mercado|minimarket|farmacia|feria|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\s+por\s+/i, '');
+  cleaned = cleaned.replace(/^(?:en\s+la\s+feria|en\s+(?:el\s+|la\s+)?(?:super(?:mercado)?|mercado|minimarket|farmacia|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa))\b[,:]?\s*/i, '');
+  cleaned = cleaned.replace(/^(?:por|para|en|de|con|a|al|el|la|los|las|un|una|del)\s+/i, '');
+  cleaned = stripTemporalTail(cleaned);
+  cleaned = normalizeListItem(cleaned);
+  return cleaned;
+}
+
+function isNoiseItem(label: string): boolean {
+  if (!label) return true;
+  return NOISE_ITEM_PATTERNS.some((pattern) => pattern.test(label));
 }
 
 /* ──────────────────────────────────────────
@@ -420,8 +459,9 @@ export function buildShoppingList(input: string): ShoppingListBuildResult | null
 
   const parts = cleaned
     .split(/[,;/]|\s+y\s+|\n+/i)
-    .map(normalizeListItem)
+    .map(sanitizeItemLabel)
     .filter(Boolean)
+    .filter((label) => !isNoiseItem(label))
     .flatMap(splitAdjacentKnown);
 
   const storeFromRaw = detectStoreType(raw);
@@ -448,16 +488,17 @@ export function buildShoppingList(input: string): ShoppingListBuildResult | null
 
   const items: ShoppingItem[] = itemLabels.map((rawLabel) => {
     const details = parseItemDetails(rawLabel);
+    const sanitizedLabel = sanitizeItemLabel(details.label);
     return {
       id: crypto.randomUUID(),
-      label: details.label,
-      category: classifyItemCategory(details.label),
+      label: sanitizedLabel,
+      category: classifyItemCategory(sanitizedLabel),
       checked: false,
       amount: details.amount,
       quantity: details.quantity,
       unit: details.unit,
     };
-  });
+  }).filter((item) => !isNoiseItem(item.label));
 
   const detectedTags = detectTags(items.map((i) => i.label));
 

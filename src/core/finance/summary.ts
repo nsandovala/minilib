@@ -15,6 +15,11 @@ function getEntryAmount(entry: TimelineEntry): number {
 }
 
 function getFinancialDirection(entry: TimelineEntry): 'income' | 'expense' {
+  const metadata = entry.metadata as Record<string, unknown> | null | undefined;
+  const direction = typeof metadata?.direction === 'string' ? metadata.direction.toLowerCase() : '';
+  if (direction === 'income' || entry.tags.includes('income')) return 'income';
+  if (direction === 'expense' || entry.tags.includes('expense')) return 'expense';
+
   return /\b(ingreso|sueldo|me\s+pagaron|pagaron|venta|transferencia\s+recibida|entró|entro|depósito|deposito)\b/i.test(
     `${entry.text} ${entry.title}`,
   )

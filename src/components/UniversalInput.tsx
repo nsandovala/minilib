@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { processInput, previewInput } from '@/core/agents/orchestrator';
 import { addEntry } from '@/db/entries';
 import type { EntryType } from '@/types';
+import { shouldSubmitFromComposerKey } from './UniversalInput.shortcuts';
 
 interface UniversalInputProps {
   onEntryAdded: () => void;
@@ -278,7 +279,7 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
   };
 
   const handleComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    if (shouldSubmitFromComposerKey(e)) {
       e.preventDefault();
       void submitEntry();
     }
