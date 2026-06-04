@@ -4,7 +4,7 @@ import { hasExplicitListIntent, shouldBuildShoppingList, hasProjectIntent } from
 
 export interface ShoppingListBuildResult {
   listKind: 'shopping';
-  storeType: 'supermercado' | 'feria' | 'farmacia' | 'otro';
+  storeType: 'supermercado' | 'farmacia' | 'feria' | 'minimarket' | 'botilleria' | 'mall' | 'mall_chino' | 'panaderia' | 'carniceria' | 'verduleria' | 'otro';
   items: ShoppingItem[];
   progress: ShoppingProgress;
   detectedTags: string[];
@@ -15,15 +15,15 @@ export interface ShoppingListBuildResult {
    ────────────────────────────────────────── */
 
 const INTRO_PATTERNS = [
-  /\bcompra\s+en\s+(?:el\s+|la\s+)?(?:super(?:mercado)?|mercado|minimarket|feria|farmacia|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\b/gi,
-  /\bcomprar\s+en\s+(?:el\s+|la\s+)?(?:super(?:mercado)?|mercado|minimarket|feria|farmacia|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\b/gi,
+  /\bcompra\s+en\s+(?:el\s+|la\s+)?(?:super(?:mercado)?|mercado|minimarket|feria|farmacia|botiller[ií]a|mall\s*chino|mall|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\b/gi,
+  /\bcomprar\s+en\s+(?:el\s+|la\s+)?(?:super(?:mercado)?|mercado|minimarket|feria|farmacia|botiller[ií]a|mall\s*chino|mall|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\b/gi,
   /\bcomprar\s+en\s+(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
   /\bcompras\s+(?:para\s+)?(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
-  /\bcompras\s+(?:en\s+)?(?:la\s+)?(?:feria|farmacia|minimarket|super(?:mercado)?|mercado|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\b/gi,
+  /\bcompras\s+(?:en\s+)?(?:la\s+)?(?:feria|farmacia|minimarket|super(?:mercado)?|mercado|botiller[ií]a|mall\s*chino|mall|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\b/gi,
   /\blista\s+(?:de\s+)?(?:compras|supermercado|super)\b/gi,
   /\blista\s+supermercado\b/gi,
   /\bnecesito\s+(?:comprar|traer)\b/gi,
-  /\bpasar\s+al\s+(?:super(?:mercado)?|mercado|minimarket|almac[eé]n|farmacia|feria|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a)\s+por\b/gi,
+  /\bpasar\s+al\s+(?:super(?:mercado)?|mercado|minimarket|almac[eé]n|farmacia|feria|botiller[ií]a|mall\s*chino|mall|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a)\s+por\b/gi,
   /\bpasar\s+al\s+(?:super(?:mercado)?|mercado)\s+por\b/gi,
   /\btraer\s+(?:de\s+)?(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
   /\bir\s+a\s+(?:comprar|el\s+super|el\s+mercado)\b/gi,
@@ -31,6 +31,9 @@ const INTRO_PATTERNS = [
   /\bcompras\b/gi,
   /\bsupermercado\b/gi,
   /\bminimarket\b/gi,
+  /\bbotiller[ií]a\b/gi,
+  /\bmall\s*chino\b/gi,
+  /\bmall\b/gi,
   /\bferreter[ií]a\b/gi,
   /\bdespensa\b/gi,
   /\bfarmacia\b/gi,
@@ -56,10 +59,16 @@ function cleanShoppingIntro(text: string): string {
    ────────────────────────────────────────── */
 
 const STORE_TYPE_PATTERNS: { pattern: RegExp; type: ShoppingListBuildResult['storeType'] }[] = [
+  { pattern: /\bmall\s*chino\b/i, type: 'mall_chino' },
+  { pattern: /\bminimarket\b/i, type: 'minimarket' },
   { pattern: /\b(supermercado|super|en\s+el\s+super|en\s+el\s+supermercado)\b/i, type: 'supermercado' },
-  { pattern: /\bminimarket\b/i, type: 'supermercado' },
   { pattern: /\bferia\b/i, type: 'feria' },
   { pattern: /\bfarmacia\b/i, type: 'farmacia' },
+  { pattern: /\bbotiller[ií]a\b/i, type: 'botilleria' },
+  { pattern: /\bmall\b/i, type: 'mall' },
+  { pattern: /\bpanader[ií]a\b/i, type: 'panaderia' },
+  { pattern: /\bcarnicer[ií]a\b/i, type: 'carniceria' },
+  { pattern: /\bverduler[ií]a\b/i, type: 'verduleria' },
 ];
 
 function detectStoreType(text: string): ShoppingListBuildResult['storeType'] {
@@ -89,6 +98,7 @@ const NOISE_ITEM_PATTERNS = [
 
 function stripTemporalTail(label: string): string {
   return label
+    .replace(/\s+\btotal\s+\$?\s*\d[\d.,]*\b.*$/i, '')
     .replace(/\s+\bpara\s+(?:el\s+|la\s+)?(?:hoy|mañana|manana|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\b.*$/i, '')
     .replace(/\s+\b(?:el\s+|la\s+)?(?:hoy|mañana|manana|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\b.*$/i, '')
     .replace(/\s+\bpara(?:\s+(?:el|la))?\s*$/i, '')
@@ -98,8 +108,8 @@ function stripTemporalTail(label: string): string {
 function sanitizeItemLabel(item: string): string {
   let cleaned = normalizeListItem(item);
   cleaned = cleaned.replace(/^(?:compra\s+en|comprar\s+en|compras?\s+en)\s+/i, '');
-  cleaned = cleaned.replace(/^(?:pasar\s+al?\s+)?(?:super(?:mercado)?|mercado|minimarket|farmacia|feria|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\s+por\s+/i, '');
-  cleaned = cleaned.replace(/^(?:en\s+la\s+feria|en\s+(?:el\s+|la\s+)?(?:super(?:mercado)?|mercado|minimarket|farmacia|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa))\b[,:]?\s*/i, '');
+  cleaned = cleaned.replace(/^(?:pasar\s+al?\s+)?(?:super(?:mercado)?|mercado|minimarket|farmacia|feria|botiller[ií]a|mall\s*chino|mall|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\s+por\s+/i, '');
+  cleaned = cleaned.replace(/^(?:en\s+la\s+feria|en\s+(?:el\s+|la\s+)?(?:super(?:mercado)?|mercado|minimarket|farmacia|botiller[ií]a|mall\s*chino|mall|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa))\b[,:]?\s*/i, '');
   cleaned = cleaned.replace(/^(?:por|para|en|de|con|a|al|el|la|los|las|un|una|del)\s+/i, '');
   cleaned = stripTemporalTail(cleaned);
   cleaned = normalizeListItem(cleaned);
@@ -210,6 +220,8 @@ const ITEM_CATEGORY_MAP: Record<string, string> = {
   paltas: 'frutas/verduras',
   lechuga: 'frutas/verduras',
   cebolla: 'frutas/verduras',
+  choclo: 'frutas/verduras',
+  choclos: 'frutas/verduras',
   papas: 'frutas/verduras',
   papa: 'frutas/verduras',
   zanahoria: 'frutas/verduras',
@@ -465,9 +477,9 @@ export function buildShoppingList(input: string): ShoppingListBuildResult | null
     .flatMap(splitAdjacentKnown);
 
   const storeFromRaw = detectStoreType(raw);
-  const hasStoreKeyword = /\b(supermercado|super|mercado|minimarket|feria|farmacia|ferreter[ií]a|despensa)\b/i.test(raw);
+  const hasStoreKeyword = /\b(supermercado|super|mercado|minimarket|feria|farmacia|botiller[ií]a|mall\s*chino|mall|panader[ií]a|carnicer[ií]a|verduler[ií]a|ferreter[ií]a|despensa)\b/i.test(raw);
 
-  const storeNameSet = new Set(['supermercado', 'super', 'feria', 'farmacia', 'minimarket', 'ferretería', 'ferreteria', 'despensa']);
+  const storeNameSet = new Set(['supermercado', 'super', 'feria', 'farmacia', 'minimarket', 'botillería', 'botilleria', 'mall', 'mall chino', 'panadería', 'panaderia', 'carnicería', 'carniceria', 'verdulería', 'verduleria', 'ferretería', 'ferreteria', 'despensa']);
   const firstPartLower = parts[0]?.toLowerCase() ?? '';
   const isFirstPartStore = storeNameSet.has(firstPartLower);
 

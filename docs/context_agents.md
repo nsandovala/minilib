@@ -103,6 +103,45 @@ Reiniciar servidor de desarrollo (el valor se embebe en el bundle al inicio).
 
 ## Bitácora de cambios
 
+### 2026-06-04 — RADAR/card contracts estrictos con Zod
+
+**Rama:** `feature/radar-zod-card-contracts`
+
+**Objetivo:** estabilizar creación de cards antes de producción: IA interpreta, Zod valida, heurísticas rescatan y la UI recibe contratos confiables.
+
+**Cambios realizados:**
+- Contrato central Zod para radar/cards con `EntryType`, `StoreType`, money, fecha/hora, tags, metadata y preparación mínima para futuro `Shopping Completion Flow`.
+- Normalización central de salida IA/fallback antes de responder o construir cards: evita años como monto, limpia `total`, preserva `date_text`, fuerza surface por tipo, infiere `storeType` y filtra ítems ambiguos.
+- `/api/radar/intake` ahora usa contrato central, fallback heurístico validado y logs seguros sin payload completo.
+- Cliente `radar.ts` reutiliza el contrato central y conserva tags como `payment/expense`.
+- Heurísticas locales ajustadas para `pago`, `mensualidad`, años 2026 como fecha, store types ampliados y `total` de compras sin contaminar items.
+- `middleware.ts` deja público solo `/api/radar/intake` para permitir captura radar sin bloqueo Clerk en ese endpoint.
+
+**Archivos tocados:**
+- `src/core/contracts/card-contracts.ts`
+- `src/core/cognitive/normalize-radar-result.ts`
+- `src/app/api/radar/intake/route.ts`
+- `src/lib/radar.ts`
+- `src/core/agents/parser-agent.ts`
+- `src/core/agents/parser-rules.ts`
+- `src/core/agents/list-builder-agent.ts`
+- `src/core/agents/normalizer-agent.ts`
+- `src/types/index.ts`
+- `src/middleware.ts`
+- `tests/radar-intake.test.mjs`
+- `docs/context_agents.md`
+
+**Validaciones ejecutadas:**
+- `npm run typecheck` OK
+- `node --experimental-strip-types --test tests/*.test.mjs` OK — 201/201 passing
+- `npm run build` OK
+- `POST /api/radar/intake` local OK — HTTP 200; fallback heurístico por timeout devolvió `type: payment`, `amount: 21000`, tags `payment/expense`.
+
+**Pendientes:**
+- No se implementó Shopping Completion Flow; solo quedó metadata preparada (`possibleTotal`, `shoppingCompletion`).
+- No se tocó DB schema ni sync.
+- OpenRouter puede seguir agotando timeout; el fallback ya responde contrato validado.
+
 ### 2026-06-03 — RADAR intake — Zod validation + defensive normalization
 
 **Qué se tocó:**

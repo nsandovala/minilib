@@ -272,7 +272,7 @@ export function normalizeEntry(tokens: ExtractedTokens, source?: string): Parsed
     date: calendarResult?.matched ? calendarResult.date ?? undefined : tokens.date ?? undefined,
     time: calendarResult?.matched ? calendarResult.time ?? undefined : tokens.time ?? undefined,
     tags,
-    amount: shoppingTotal ?? tokens.amount ?? undefined,
+    amount: type === 'payment' ? tokens.amount ?? undefined : undefined,
     checklistItems: tokens.checklistItems.length ? tokens.checklistItems : undefined,
     listItems: tokens.listItems.length ? tokens.listItems : undefined,
     listGroups: tokens.listGroups.length ? tokens.listGroups : undefined,

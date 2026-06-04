@@ -114,7 +114,7 @@ export function hasHealthIntent(text: string): boolean {
  */
 export function hasShoppingIntent(text: string): boolean {
   if (/\b(modulo|m[oó]dulo|flujo|categor[ií]a|investigaci[oó]n|an[aá]lisis)\b/i.test(text)) return false;
-  return /\b(comprar|compras?|lista\s+(?:de\s+)?(?:compras?|super(?:mercado)?|super)|compras?\s+del\s+super|supermercado|super|minimarket|almac[eé]n|feria|mercado|farmacia|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|despensa|\bingredientes\b)\b/i.test(text);
+  return /\b(comprar|compras?|lista\s+(?:de\s+)?(?:compras?|super(?:mercado)?|super)|compras?\s+del\s+super|supermercado|super|minimarket|almac[eé]n|feria|mercado|farmacia|botiller[ií]a|mall\s*chino|mall|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|despensa|\bingredientes\b)\b/i.test(text);
 }
 
 export function hasExpensePurchaseIntent(text: string): boolean {
@@ -127,8 +127,8 @@ export function hasExpensePurchaseIntent(text: string): boolean {
  * True when text signals a payment obligation or financial transaction.
  */
 export function hasPaymentIntent(text: string): boolean {
-  return /\b(pagar|abonar|transferir|cobrar|depositar)\b/i.test(text)
-    || /\b(vencimiento|suscripci[oó]n|cuota\s+de|arriendo|hipoteca|pr[eé]stamo)\b/i.test(text)
+  return /\b(pagar|pago|abonar|transferir|cobrar|depositar)\b/i.test(text)
+    || /\b(vencimiento|suscripci[oó]n|mensualidad|cuota\s+de|arriendo|hipoteca|pr[eé]stamo)\b/i.test(text)
     || /\bfactura\s+(de|del?|pendiente|venc)/i.test(text);
 }
 

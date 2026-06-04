@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { buildHeuristicRadarResult, normalizeRadarResult } from '../src/core/cognitive/normalize-radar-result.ts';
 
 // ─── Inline mirrors of src/lib/radar.ts pure logic ───────────────────────────
 // (Cannot import TypeScript files that use @/ aliases directly in Node test runner)
@@ -247,6 +248,76 @@ test('type mapping: home → task', () => {
 
 test('type mapping: tipo desconocido → fallback note', () => {
   assert.equal(TYPE_MAP['xyz'] ?? 'note', 'note');
+});
+
+// ─── Contratos Zod centrales: casos críticos pre-producción ──────────────────
+
+test('[zod-1] pago google one 21000 → payment con monto y tags', () => {
+  const result = buildHeuristicRadarResult('pago google one 21000');
+  assert.equal(result.type, 'payment');
+  assert.equal(result.amount, 21000);
+  assert.ok(result.tags.includes('payment'));
+  assert.ok(result.tags.includes('expense'));
+});
+
+test('[zod-2] buscar vuelos diciembre 2026 → no interpreta año como monto', () => {
+  const result = buildHeuristicRadarResult('buscar vuelos para diciembre 2026 para luna de miel');
+  assert.ok(result.type === 'task' || result.type === 'note');
+  assert.equal(result.amount, null);
+  assert.notEqual(result.type, 'payment');
+});
+
+test('[zod-3] sábado comprar pan leche bebida → shopping_list con sábado preservado', () => {
+  const result = buildHeuristicRadarResult('sábado comprar pan leche bebida');
+  assert.equal(result.type, 'shopping_list');
+  assert.deepEqual(result.checklist_items, ['pan', 'leche', 'bebida']);
+  assert.equal(result.date_text, 'sábado');
+  assert.equal(result.dateISO, null);
+  assert.equal(result.amount, null);
+});
+
+test('[zod-4] comprar pan leche bebida en minimarket → storeType minimarket', () => {
+  const result = buildHeuristicRadarResult('comprar pan leche bebida en minimarket');
+  assert.equal(result.type, 'shopping_list');
+  assert.equal(result.storeType, 'minimarket');
+  assert.deepEqual(result.checklist_items, ['pan', 'leche', 'bebida']);
+});
+
+test('[zod-5] médico miércoles a las 15:30 → cita/salud sin monto', () => {
+  const result = buildHeuristicRadarResult('médico miércoles a las 15:30');
+  assert.ok(result.type === 'appointment' || result.type === 'health');
+  assert.equal(result.time, '15:30');
+  assert.equal(result.amount, null);
+  assert.notEqual(result.type, 'payment');
+});
+
+test('[zod-6] hora veterinaria para saly sábado 15:30 → pet o appointment con tag pet', () => {
+  const result = buildHeuristicRadarResult('hora veterinaria para saly sábado 15:30');
+  assert.ok(result.type === 'pet' || result.type === 'appointment');
+  if (result.type === 'appointment') assert.ok(result.tags.includes('pet'));
+  assert.equal(result.time, '15:30');
+  assert.equal(result.amount, null);
+});
+
+test('[zod-7] pago mensualidad escuela hijo 15.000 → payment 15000', () => {
+  const result = buildHeuristicRadarResult('pago mensualidad escuela hijo 15.000');
+  assert.equal(result.type, 'payment');
+  assert.equal(result.amount, 15000);
+});
+
+test('[zod-8] total de compra no contamina items', () => {
+  const result = normalizeRadarResult({
+    type: 'shopping_list',
+    surface: 'purchases',
+    title: 'Compra',
+    checklist_items: ['choclos total 7330'],
+    amount: 7330,
+  }, 'choclos total 7330');
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.data?.checklist_items, ['choclos']);
+  assert.equal(result.data?.amount, null);
+  assert.equal(result.data?.metadata.possibleTotal, 7330);
 });
 
 // ─── Casos de uso completos (mock de respuesta IA) ───────────────────────────

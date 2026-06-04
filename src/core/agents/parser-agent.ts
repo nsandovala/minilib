@@ -12,7 +12,7 @@ export interface ExtractedTokens {
   listGroups: string[];
   detectedTags: string[];
   isListLike: boolean;
-  storeType: 'supermercado' | 'feria' | 'farmacia' | 'otro' | null;
+  storeType: ShoppingListBuildResult['storeType'] | null;
   categorizedItems: { label: string; category: string }[];
   shoppingList: ShoppingListBuildResult | null;
 }
@@ -159,6 +159,13 @@ function extractDate(text: string): { date: string | null; cleaned: string } {
 }
 
 function extractAmount(text: string): { amount: number | null; cleaned: string } {
+  const isYearLike = (num: number, raw: string) => {
+    if (num < 1900 || num > 2100) return false;
+    if (/\b(comprar|compra|compr[eé]|gasto|gast[eé]|cost[oó])\b/i.test(raw)) return false;
+    return /\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|viaje|vuelos?|año|ano)\b/i.test(raw)
+      || !/\$|\b(clp|pesos?|lucas?|pagar|pago|mensualidad|cuenta|factura|abonar|cobrar|cost[oó])\b/i.test(raw);
+  };
+
   const lucasMatch = text.match(/(\d+(?:[.,]\d{3})?)\s*lucas?/i);
   if (lucasMatch) {
     const cleaned = text
@@ -167,10 +174,8 @@ function extractAmount(text: string): { amount: number | null; cleaned: string }
       .replace(/\s{2,}/g, ' ')
       .trim();
     const raw = lucasMatch[1].replace(/[.,]/g, '');
-    return {
-      amount: parseInt(raw, 10),
-      cleaned,
-    };
+    const amount = parseInt(raw, 10);
+    return { amount: isYearLike(amount, text) ? null : amount, cleaned };
   }
 
   const kMatch = text.match(/(\d+(?:\.\d+)?)\s*k\b/i);
@@ -196,7 +201,7 @@ function extractAmount(text: string): { amount: number | null; cleaned: string }
       .trim();
     const raw = clpMatch[1].replace(/[.,]/g, '');
     const num = parseInt(raw, 10);
-    if (num >= 100) {
+    if (num >= 100 && !isYearLike(num, text)) {
       return {
         amount: num,
         cleaned,
@@ -213,7 +218,7 @@ function extractAmount(text: string): { amount: number | null; cleaned: string }
       .replace(/\s{2,}/g, ' ')
       .trim();
     const num = parseInt(fullNumberMatch[1], 10);
-    if (num >= 100) {
+    if (num >= 100 && !isYearLike(num, text)) {
       return {
         amount: num,
         cleaned,
@@ -245,7 +250,7 @@ function extractListMetadata(text: string): {
   listGroups: string[];
   detectedTags: string[];
   isListLike: boolean;
-  storeType: 'supermercado' | 'feria' | 'farmacia' | 'otro' | null;
+  storeType: ShoppingListBuildResult['storeType'] | null;
   categorizedItems: { label: string; category: string }[];
   shoppingList: ShoppingListBuildResult | null;
 } {
@@ -320,7 +325,7 @@ export interface ParsedIntent {
     | 'income'
     | 'pet'
     | 'note';
-  storeType?: 'supermercado' | 'feria' | 'farmacia' | 'otro';
+  storeType?: ShoppingListBuildResult['storeType'];
   items?: { label: string; category: string }[];
   title?: string;
   date?: string | null;

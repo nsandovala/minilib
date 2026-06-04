@@ -48,14 +48,14 @@ const TYPE_COLORS: Record<EntryType, string> = {
   health:        '#7a9e7e',
   appointment:   '#7a9e7e',
   reminder:      '#b8944e',
-  task:          'rgba(245,240,235,0.45)',
+  task:          '#9e8a72',
   pet:           '#c9a882',
-  note:          'rgba(245,240,235,0.34)',
+  note:          '#a99e8e',
   shopping_list: '#8faa8b',
 };
 
 const PRIORITY_DOT = {
-  normal:    'rgba(245,240,235,0.2)',
+  normal:    'rgba(120, 100, 80, 0.35)',
   important: '#c9a882',
   urgent:    '#c47070',
 };
@@ -197,8 +197,8 @@ function ChecklistRow({ item, onToggle }: ChecklistRowProps) {
           width: '16px',
           height: '16px',
           borderRadius: '4px',
-          border: `1.5px solid ${item.checked ? '#7a9e7e' : 'rgba(255,248,240,0.18)'}`,
-          background: item.checked ? 'rgba(122,158,126,0.18)' : 'rgba(255,248,240,0.02)',
+          border: `1.5px solid ${item.checked ? '#7a9e7e' : 'var(--divider-strong)'}`,
+          background: item.checked ? 'rgba(122,158,126,0.18)' : 'var(--divider-bg)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -255,8 +255,8 @@ function MetadataChecklistRow({ item, onToggle }: MetadataChecklistRowProps) {
           width: '16px',
           height: '16px',
           borderRadius: '4px',
-          border: `1.5px solid ${item.checked ? '#7a9e7e' : 'rgba(255,248,240,0.18)'}`,
-          background: item.checked ? 'rgba(122,158,126,0.18)' : 'rgba(255,248,240,0.02)',
+          border: `1.5px solid ${item.checked ? '#7a9e7e' : 'var(--divider-strong)'}`,
+          background: item.checked ? 'rgba(122,158,126,0.18)' : 'var(--divider-bg)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -360,8 +360,8 @@ function CalendarDetail({ entry }: { entry: TimelineEntry }) {
                 gap: '10px',
                 padding: '8px 10px',
                 borderRadius: '12px',
-                border: '1px solid rgba(255,248,240,0.06)',
-                background: 'rgba(255,248,240,0.025)',
+                border: '1px solid var(--divider)',
+                background: 'var(--divider-bg)',
               }}
             >
               <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: '#c9a882', flexShrink: 0 }}>
@@ -493,7 +493,7 @@ function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onActio
           color: isNow
             ? 'rgba(201,168,130,0.6)'
             : isCompleted
-            ? 'rgba(245,240,235,0.2)'
+            ? 'var(--text-muted)'
             : 'var(--text-muted)',
           textTransform: 'uppercase',
           letterSpacing: '0.07em',
@@ -723,8 +723,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
               onBlur={handleSaveEdit}
               style={{
                 flex: 1,
-                background: 'rgba(255,248,240,0.06)',
-                border: '1px solid rgba(255,248,240,0.12)',
+                background: 'var(--divider-bg)',
+                border: '1px solid var(--divider-strong)',
                 borderRadius: '8px',
                 padding: '6px 10px',
                 fontSize: '13px',
@@ -826,8 +826,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                             width: '13px',
                             height: '13px',
                             borderRadius: '3px',
-                            border: `1px solid ${(item as { checked: boolean }).checked ? 'rgba(122,158,126,0.4)' : 'rgba(255,248,240,0.14)'}`,
-                            background: (item as { checked: boolean }).checked ? 'rgba(122,158,126,0.1)' : 'rgba(255,248,240,0.02)',
+                          border: `1px solid ${(item as { checked: boolean }).checked ? 'rgba(122,158,126,0.4)' : 'var(--divider-strong)'}`,
+                          background: (item as { checked: boolean }).checked ? 'rgba(122,158,126,0.1)' : 'var(--divider-bg)',
                             flexShrink: 0,
                             display: 'flex',
                             alignItems: 'center',
@@ -858,8 +858,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                             width: '13px',
                             height: '13px',
                             borderRadius: '3px',
-                            border: `1px solid ${item.checked ? 'rgba(122,158,126,0.4)' : 'rgba(255,248,240,0.14)'}`,
-                            background: item.checked ? 'rgba(122,158,126,0.1)' : 'rgba(255,248,240,0.02)',
+                          border: `1px solid ${item.checked ? 'rgba(122,158,126,0.4)' : 'var(--divider-strong)'}`,
+                          background: item.checked ? 'rgba(122,158,126,0.1)' : 'var(--divider-bg)',
                             flexShrink: 0,
                             display: 'flex',
                             alignItems: 'center',
@@ -916,7 +916,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                     borderRadius: '999px',
                     color: statusText === 'vencido' ? '#c47070' : statusText === 'pendiente' ? '#b8944e' : '#7a9e7e',
                     background: statusText === 'vencido' ? 'rgba(196,112,112,0.08)' : statusText === 'pendiente' ? 'rgba(184,148,78,0.08)' : 'rgba(122,158,126,0.08)',
-                    border: '1px solid rgba(255,248,240,0.08)',
+                    border: '1px solid var(--divider)',
                     lineHeight: 1.4,
                   }}
                 >
@@ -953,7 +953,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
             {expanded && (
               <div
                 style={{
-                  borderTop: '1px solid rgba(255,248,240,0.08)',
+                  borderTop: '1px solid var(--divider)',
                   paddingTop: '10px',
                   display: 'grid',
                   gap: '7px',
@@ -981,7 +981,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                                 alignItems: 'center',
                                 marginTop: '6px',
                                 paddingTop: '6px',
-                                borderTop: '1px solid rgba(255,248,240,0.06)',
+                                borderTop: '1px solid var(--divider)',
                               }}
                             >
                               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
@@ -1061,7 +1061,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                   <p style={{
                     margin: '4px 0 0',
                     fontSize: '10px',
-                    color: 'rgba(245,240,235,0.22)',
+                    color: 'var(--text-muted)',
                     lineHeight: 1.5,
                     fontStyle: 'italic',
                   }}>
