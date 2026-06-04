@@ -307,19 +307,12 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
     <div style={{ padding: '0 20px' }}>
       <form onSubmit={handleSubmit}>
         <div
-          className="glass-card"
+          className={`glass-card ${justSaved ? 'input-just-saved' : error ? 'input-error' : ''}`}
           style={{
             padding: '4px',
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            background: 'var(--glass-bg)',
-            borderColor: justSaved
-              ? 'rgba(122, 158, 126, 0.35)'
-              : error
-              ? 'rgba(196, 112, 112, 0.35)'
-              : 'var(--border-soft)',
-            boxShadow: 'var(--shadow-soft)',
             transition: 'border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease',
           }}
         >
