@@ -6,6 +6,7 @@ import BottomNav from '@/components/ui/BottomNav';
 import NotificationBanner from '@/components/ui/NotificationBanner';
 import AppInit from '@/components/ui/AppInit';
 import DebugPanelGate from '@/components/ui/DebugPanelGate';
+import { ThemeProvider } from '@/components/theme/ThemeProvider';
 
 const PWA_ICON_VERSION = '20260513';
 const DEFAULT_APP_URL = 'https://liev-ten.vercel.app';
@@ -25,6 +26,27 @@ const SpaceBackground = nextDynamic(
   () => import('@/components/ui/SpaceBackground'),
   { ssr: false }
 );
+
+const themeInitScript = `
+(function() {
+  try {
+    var key = 'liev-theme-mode';
+    var mode = window.localStorage.getItem(key);
+    if (mode !== 'auto' && mode !== 'light' && mode !== 'dark') mode = 'auto';
+    var resolved = mode === 'auto'
+      ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+      : mode;
+    if (resolved !== 'light' && resolved !== 'dark') resolved = 'dark';
+    document.documentElement.dataset.themeMode = mode;
+    document.documentElement.dataset.theme = resolved;
+    document.documentElement.style.colorScheme = resolved;
+  } catch (error) {
+    document.documentElement.dataset.themeMode = 'auto';
+    document.documentElement.dataset.theme = 'dark';
+    document.documentElement.style.colorScheme = 'dark';
+  }
+})();
+`;
 
 export const metadata: Metadata = {
   title: 'Liev',
@@ -68,20 +90,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <body>
         <ClerkProvider>
-          <SpaceBackground />
-          <div aria-hidden="true">
-            <div className="bg-grain" />
-          </div>
-          <main className="content-layer" style={{ paddingBottom: '72px' }}>
-            {children}
-          </main>
-          <NotificationBanner />
-          <BottomNav />
-          <AppInit />
-          <DebugPanelGate />
+          <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+          <ThemeProvider>
+            <SpaceBackground />
+            <div aria-hidden="true">
+              <div className="bg-grain" />
+            </div>
+            <main className="content-layer" style={{ paddingBottom: '72px' }}>
+              {children}
+            </main>
+            <NotificationBanner />
+            <BottomNav />
+            <AppInit />
+            <DebugPanelGate />
+          </ThemeProvider>
         </ClerkProvider>
       </body>
     </html>

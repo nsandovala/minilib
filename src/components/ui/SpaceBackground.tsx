@@ -17,6 +17,22 @@ interface Star {
   parallax: number;
 }
 
+type ThemePalette = {
+  bgApp: string;
+  particleColor: string;
+  particleOpacity: number;
+  accentPrimary: string;
+  accentSoft: string;
+};
+
+const FALLBACK_PALETTE: ThemePalette = {
+  bgApp: '#0a0805',
+  particleColor: '#fff8f0',
+  particleOpacity: 0.9,
+  accentPrimary: '#c9a882',
+  accentSoft: 'rgba(201,168,130,0.14)',
+};
+
 function mulberry32(seed: number): () => number {
   return function () {
     seed |= 0;
@@ -91,6 +107,7 @@ export default function SpaceBackground(): JSX.Element | null {
   const scrollYRef = useRef(0);
   const starsRef = useRef<Star[]>([]);
   const dimsRef = useRef({ width: 0, height: 0, dpr: 1 });
+  const paletteRef = useRef<ThemePalette>(FALLBACK_PALETTE);
 
   const stars = useMemo(() => generateStars(), []);
   starsRef.current = stars;
@@ -111,6 +128,21 @@ export default function SpaceBackground(): JSX.Element | null {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     dimsRef.current.dpr = dpr;
 
+    function readPalette() {
+      const styles = getComputedStyle(document.documentElement);
+      const opacity = Number.parseFloat(styles.getPropertyValue('--particle-opacity'));
+
+      paletteRef.current = {
+        bgApp: styles.getPropertyValue('--bg-app').trim() || FALLBACK_PALETTE.bgApp,
+        particleColor: styles.getPropertyValue('--particle-color').trim() || FALLBACK_PALETTE.particleColor,
+        particleOpacity: Number.isFinite(opacity) ? opacity : FALLBACK_PALETTE.particleOpacity,
+        accentPrimary: styles.getPropertyValue('--accent-primary').trim() || FALLBACK_PALETTE.accentPrimary,
+        accentSoft: styles.getPropertyValue('--accent-soft').trim() || FALLBACK_PALETTE.accentSoft,
+      };
+    }
+
+    readPalette();
+
     function resize() {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -124,6 +156,12 @@ export default function SpaceBackground(): JSX.Element | null {
     resize();
     window.addEventListener('resize', resize);
 
+    const observer = new MutationObserver(readPalette);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'data-theme-mode', 'style'],
+    });
+
     function onScroll() {
       scrollYRef.current = window.scrollY;
     }
@@ -136,7 +174,7 @@ export default function SpaceBackground(): JSX.Element | null {
       const cy = height * 0.25;
       const r = width * 0.35;
       const grad = ctx!.createRadialGradient(cx, cy, 0, cx, cy, r);
-      grad.addColorStop(0, 'rgba(201,168,130,0.06)');
+      grad.addColorStop(0, paletteRef.current.accentSoft);
       grad.addColorStop(1, 'rgba(201,168,130,0)');
       ctx!.fillStyle = grad;
       ctx!.beginPath();
@@ -149,7 +187,7 @@ export default function SpaceBackground(): JSX.Element | null {
       const cy = height * 0.6;
       const r = width * 0.28;
       const grad = ctx!.createRadialGradient(cx, cy, 0, cx, cy, r);
-      grad.addColorStop(0, 'rgba(139,92,246,0.04)');
+      grad.addColorStop(0, paletteRef.current.accentSoft);
       grad.addColorStop(1, 'rgba(139,92,246,0)');
       ctx!.fillStyle = grad;
       ctx!.beginPath();
@@ -173,12 +211,12 @@ export default function SpaceBackground(): JSX.Element | null {
         Math.min(1, star.baseOpacity + twinkle)
       );
 
-      ctx!.globalAlpha = opacity;
-      ctx!.fillStyle = star.color;
+      ctx!.globalAlpha = opacity * paletteRef.current.particleOpacity;
+      ctx!.fillStyle = paletteRef.current.particleColor || star.color;
 
       if (star.layer === 3 && star.glowBlur && star.glowColor) {
         ctx!.shadowBlur = star.glowBlur;
-        ctx!.shadowColor = star.glowColor;
+        ctx!.shadowColor = paletteRef.current.accentPrimary || star.glowColor;
       } else {
         ctx!.shadowBlur = 0;
         ctx!.shadowColor = 'transparent';
@@ -197,7 +235,7 @@ export default function SpaceBackground(): JSX.Element | null {
       const { width, height } = dimsRef.current;
 
       // 1. Base background
-      ctx!.fillStyle = '#0a0805';
+      ctx!.fillStyle = paletteRef.current.bgApp;
       ctx!.fillRect(0, 0, width, height);
 
       // 2. Nebulas (static)
@@ -218,6 +256,7 @@ export default function SpaceBackground(): JSX.Element | null {
 
     return () => {
       cancelAnimationFrame(rafId);
+      observer.disconnect();
       window.removeEventListener('resize', resize);
       window.removeEventListener('scroll', onScroll);
     };

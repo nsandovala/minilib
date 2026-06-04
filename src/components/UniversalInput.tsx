@@ -3,8 +3,11 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { processInput, previewInput } from '@/core/agents/orchestrator';
 import { addEntry } from '@/db/entries';
-import type { EntryType } from '@/types';
+import type { EntryType, ParsedEntry } from '@/types';
 import { shouldSubmitFromComposerKey } from './UniversalInput.shortcuts';
+import { radarIntake, radarToEntry } from '@/lib/radar';
+
+const RADAR_ENABLED = process.env.NEXT_PUBLIC_LIEV_RADAR_ENABLED === 'true';
 
 interface UniversalInputProps {
   onEntryAdded: () => void;
@@ -235,15 +238,30 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
     const trimmed = text.trim();
 
     try {
-      const result = processInput(trimmed, { source });
+      let entry: ParsedEntry | undefined;
 
-      if (!result.success || !result.entry) {
-        setError(result.error ?? 'error_desconocido');
-        return;
+      if (RADAR_ENABLED) {
+        const radar = await radarIntake(trimmed);
+        if (radar) {
+          entry = radarToEntry(radar, trimmed);
+        }
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.debug('[RADAR]', radar ? `${radar.type} conf=${radar.confidence.toFixed(2)}` : 'fallback→local');
+        }
       }
 
-      await addEntry(result.entry);
-      setSavedType(TYPE_LABELS[result.entry.type] ?? result.entry.type);
+      if (!entry) {
+        const result = processInput(trimmed, { source });
+        if (!result.success || !result.entry) {
+          setError(result.error ?? 'error_desconocido');
+          return;
+        }
+        entry = result.entry;
+      }
+
+      await addEntry(entry);
+      setSavedType(TYPE_LABELS[entry.type] ?? entry.type);
       setText('');
       setPreviewType(null);
       setPreviewDate(null);
@@ -295,12 +313,14 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            transition: 'border-color 0.2s ease',
-            ...(justSaved
-              ? { borderColor: 'rgba(122, 158, 126, 0.35)' }
+            background: 'var(--glass-bg)',
+            borderColor: justSaved
+              ? 'rgba(122, 158, 126, 0.35)'
               : error
-              ? { borderColor: 'rgba(196, 112, 112, 0.35)' }
-              : {}),
+              ? 'rgba(196, 112, 112, 0.35)'
+              : 'var(--border-soft)',
+            boxShadow: 'var(--shadow-soft)',
+            transition: 'border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease',
           }}
         >
           {/* Layered input container */}
@@ -355,8 +375,8 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
               width: '38px',
               height: '38px',
               borderRadius: '12px',
-              background: text.trim() ? 'var(--accent-human)' : 'var(--bg-surface)',
-              border: 'none',
+              background: text.trim() ? 'var(--accent-primary)' : 'var(--bg-card-soft)',
+              border: '1px solid var(--border-soft)',
               cursor: text.trim() ? 'pointer' : 'default',
               display: 'flex',
               alignItems: 'center',
