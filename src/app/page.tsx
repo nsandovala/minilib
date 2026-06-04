@@ -18,6 +18,7 @@ import TimelineView from '@/components/TimelineView';
 import MiniCalendar from '@/components/MiniCalendar';
 import LiveClock from '@/components/ui/LiveClock';
 import WeatherPill from '@/components/ui/WeatherPill';
+import ThemeSelector from '@/components/theme/ThemeSelector';
 import { getLocationAndWeather } from '@/lib/weather';
 import type { TimelineEntry } from '@/types';
 import { isCalendarEntry } from '@/lib/entries';
@@ -183,15 +184,7 @@ function DailySummary({ entries }: { entries: TimelineEntry[] }) {
 
   return (
     <div
-      className="glass-card"
-      style={{
-        margin: '12px 20px 0',
-        padding: '10px 14px',
-        borderRadius: '16px',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-        gap: '0',
-      }}
+      className="glass-card home-summary-card"
     >
       <SummaryCell label="HOY" value={todayCount} />
       <SummaryCell label="PENDIENTES" value={pendingTotal} />
@@ -757,44 +750,23 @@ export default function HomePage() {
   }
 
   return (
-    <div>
-      <div style={{ padding: '36px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <div className="home-profile-shell">
+      <div className="home-profile-header">
         <div>
-          <h1
-            style={{
-              fontSize: '24px',
-              fontWeight: 600,
-              letterSpacing: '-0.02em',
-              color: 'var(--text-primary)',
-              margin: 0,
-            }}
-          >
+          <h1 className="home-profile-title">
             Liev
           </h1>
-          <p
-            style={{
-              fontSize: '12px',
-              color: 'var(--text-muted)',
-              marginTop: '4px',
-              fontWeight: 400,
-            }}
-          >
+          <p className="home-profile-subtitle">
             Una libreta tranquila para lo cotidiano
           </p>
           {pendingCount > 0 && (
-            <p
-              style={{
-                fontSize: '11px',
-                color: 'var(--text-muted)',
-                marginTop: '6px',
-                opacity: 0.7,
-              }}
-            >
+            <p className="home-profile-pending">
               {pendingCount} pendiente{pendingCount !== 1 ? 's' : ''}
             </p>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="home-profile-actions">
+          <ThemeSelector />
           <WeatherPill />
           <LiveClock />
           <UserButton

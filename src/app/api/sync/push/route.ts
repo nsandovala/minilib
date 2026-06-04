@@ -18,6 +18,12 @@ import { buildDedupeKey } from '@/lib/sync/dedupe-key';
 
 export const dynamic = 'force-dynamic';
 
+function dedupeRowsById<T extends { id: string }>(rows: T[]): { rows: T[]; removed: number } {
+  const byId = new Map<string, T>();
+  for (const row of rows) byId.set(row.id, row);
+  return { rows: Array.from(byId.values()), removed: rows.length - byId.size };
+}
+
 function entryToInsert(
   userId: string,
   cloudId: string,
@@ -109,6 +115,13 @@ export async function POST(req: Request): Promise<Response> {
       }), row.id);
     }
 
+    // seenDedupeKeyToCloudId: tracks dedupe keys assigned within this request's batch.
+    // If two payload entries share the same dedupe_key, the second resolves to the first's
+    // cloud ID — preventing the batch from sending two rows with the same (user_id, dedupe_key)
+    // to upsertEntries, which would violate entries_user_dedupe_key_active_idx on the UPDATE
+    // phase with no ON CONFLICT handler to catch the partial-index violation.
+    const seenDedupeKeyToCloudId = new Map<string, string>();
+
     const canonicalEntryIdByIncomingLocalId = new Map<string, string>();
     const entryRows = dedupedEntries.map((payload) => {
       // dedupe_key is always computed server-side from Clerk userId — never from client payload
@@ -131,13 +144,20 @@ export async function POST(req: Request): Promise<Response> {
         createdAt: payload.createdAt,
       });
 
-      // Resolution order: exact id match → stable dedupe_key → time-bucketed fingerprint → new row
+      // Resolution order:
+      // 1. within-batch dedup key  — two entries with same dedupe_key in this push → merge
+      // 2. exact local id match    — same device, same entry (normal update)
+      // 3. DB-level dedup key      — cross-device / cross-session semantic duplicate
+      // 4. time-bucketed fingerprint
+      // 5. new scoped id
       const canonicalCloudId =
+        seenDedupeKeyToCloudId.get(dedupeKey) ??
         existingEntryByLocalId.get(payload.localId) ??
         existingEntryByDedupeKey.get(dedupeKey) ??
         existingEntryByFingerprint.get(fingerprint) ??
         scopeCloudId(userId, payload.localId);
 
+      seenDedupeKeyToCloudId.set(dedupeKey, canonicalCloudId);
       canonicalEntryIdByIncomingLocalId.set(payload.localId, canonicalCloudId);
       existingEntryByLocalId.set(payload.localId, canonicalCloudId);
       existingEntryByDedupeKey.set(dedupeKey, canonicalCloudId);
@@ -185,18 +205,97 @@ export async function POST(req: Request): Promise<Response> {
       });
     });
 
+    const dedupedEntryRowsById = dedupeRowsById(entryRows);
+    const dedupedItemRowsById  = dedupeRowsById(itemRows);
+
+    if (process.env.NODE_ENV !== 'production') {
+      if (dedupedEntryRowsById.removed > 0 || dedupedItemRowsById.removed > 0) {
+        console.warn('[push] deduped final rows by id', {
+          entryRowsBefore:    entryRows.length,
+          entryRowsAfter:     dedupedEntryRowsById.rows.length,
+          entryRowsRemoved:   dedupedEntryRowsById.removed,
+          itemRowsBefore:     itemRows.length,
+          itemRowsAfter:      dedupedItemRowsById.rows.length,
+          itemRowsRemoved:    dedupedItemRowsById.removed,
+        });
+      }
+    }
+
     await Promise.all([
-      upsertEntries(entryRows),
-      upsertChecklistItems(itemRows),
+      upsertEntries(dedupedEntryRowsById.rows).catch((e: unknown) => {
+        if (process.env.NODE_ENV !== 'production') {
+          const err = e as Record<string, unknown>;
+          const rawMessage = String(err?.message ?? '');
+          console.error('[push] upsertEntries failed', {
+            name: err?.name,
+            messageHead: rawMessage.slice(0, 800),
+            messageTail: rawMessage.slice(-1600),
+            messageLength: rawMessage.length,
+            code: err?.code,
+            constraint: err?.constraint,
+            detail: err?.detail,
+            routine: err?.routine,
+            cause: err?.cause instanceof Error
+              ? { name: (err.cause as Error).name, message: (err.cause as Error).message }
+              : undefined,
+          });
+        }
+        throw e;
+      }),
+      upsertChecklistItems(dedupedItemRowsById.rows).catch((e: unknown) => {
+        if (process.env.NODE_ENV !== 'production') {
+          const err = e as Record<string, unknown>;
+          const rawMessage = String(err?.message ?? '');
+          console.error('[push] upsertChecklistItems failed', {
+            name: err?.name,
+            messageHead: rawMessage.slice(0, 800),
+            messageTail: rawMessage.slice(-1600),
+            messageLength: rawMessage.length,
+            code: err?.code,
+            constraint: err?.constraint,
+            detail: err?.detail,
+            routine: err?.routine,
+            cause: err?.cause instanceof Error
+              ? { name: (err.cause as Error).name, message: (err.cause as Error).message }
+              : undefined,
+          });
+        }
+        throw e;
+      }),
     ]);
 
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[push] 200 — user:${userId.slice(0, 8)} entries:${entryRows.length} items:${itemRows.length}`);
+      console.log(`[push] 200 — user:${userId.slice(0, 8)} entries:${dedupedEntryRowsById.rows.length} items:${dedupedItemRowsById.rows.length}`);
     }
 
-    return Response.json({ ok: true, entries: entryRows.length, checklistItems: itemRows.length });
+    return Response.json({
+      ok: true,
+      entries: dedupedEntryRowsById.rows.length,
+      checklistItems: dedupedItemRowsById.rows.length,
+      ...(process.env.NODE_ENV !== 'production'
+        ? { deduped: { entriesRemoved: dedupedEntryRowsById.removed, checklistItemsRemoved: dedupedItemRowsById.removed } }
+        : {}),
+    });
   } catch (err) {
-    console.error('[push] 500 —', err instanceof Error ? err.message : 'unknown error');
+    if (process.env.NODE_ENV !== 'production') {
+      const e = err as Record<string, unknown>;
+      const rawMessage = String(e?.message ?? '');
+      console.error('[push] 500 —', {
+        name: e?.name,
+        messageHead: rawMessage.slice(0, 800),
+        messageTail: rawMessage.slice(-1600),
+        messageLength: rawMessage.length,
+        code: e?.code,
+        constraint: e?.constraint,
+        detail: e?.detail,
+        routine: e?.routine,
+        cause: e?.cause instanceof Error
+          ? { name: (e.cause as Error).name, message: (e.cause as Error).message }
+          : undefined,
+      });
+    } else {
+      console.error('[push] 500 —', err instanceof Error ? err.message : 'unknown error');
+    }
     return Response.json(
       { error: err instanceof Error ? err.message : 'Internal error' },
       { status: 500 },
