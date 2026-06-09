@@ -747,55 +747,88 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
               cursor: 'pointer',
             }}
           >
-            {/* Type pill + title + priority dot */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-              <span
-                style={{
-                  fontSize: '10px',
-                  padding: '2px 7px',
-                  borderRadius: '999px',
-                  border: `1px solid ${withAlpha(color, 0.2)}`,
-                  background: withAlpha(color, 0.08),
-                  color,
-                  flexShrink: 0,
-                  lineHeight: 1.5,
-                  marginTop: '1px',
-                  textTransform: 'lowercase',
-                }}
-              >
-                {displayType}
-              </span>
+            {entry.type === 'note' ? (
+              <div style={{ minWidth: 0 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '15px',
+                    fontWeight: 500,
+                    color: 'var(--text-primary)',
+                    letterSpacing: '-0.01em',
+                    lineHeight: 1.35,
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {entry.title || 'Sin título'}
+                </p>
+                <div className="preview-fade" style={{ maxHeight: '3.2em', marginTop: '4px' }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '13px',
+                      color: 'var(--text-secondary)',
+                      lineHeight: 1.5,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {entry.text}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    padding: '2px 7px',
+                    borderRadius: '999px',
+                    border: `1px solid ${withAlpha(color, 0.2)}`,
+                    background: withAlpha(color, 0.08),
+                    color,
+                    flexShrink: 0,
+                    lineHeight: 1.5,
+                    marginTop: '1px',
+                    textTransform: 'lowercase',
+                  }}
+                >
+                  {displayType}
+                </span>
 
-              <p
-                style={{
-                  margin: 0,
-                  flex: 1,
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  color: entry.done ? 'var(--text-secondary)' : 'var(--text-primary)',
-                  textDecoration: entry.done ? 'line-through' : 'none',
-                  lineHeight: 1.42,
-                  wordBreak: 'break-word',
-                }}
-              >
-                {title}
-              </p>
+                <p
+                  style={{
+                    margin: 0,
+                    flex: 1,
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: entry.done ? 'var(--text-secondary)' : 'var(--text-primary)',
+                    textDecoration: entry.done ? 'line-through' : 'none',
+                    lineHeight: 1.42,
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {title}
+                </p>
 
-              <span
-                aria-hidden="true"
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '999px',
-                  background: PRIORITY_DOT[priority],
-                  flexShrink: 0,
-                  marginTop: '6px',
-                }}
-              />
-            </div>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '999px',
+                    background: PRIORITY_DOT[priority],
+                    flexShrink: 0,
+                    marginTop: '6px',
+                  }}
+                />
+              </div>
+            )}
 
-            {/* Microcopy — only in "Ahora" group for pending entries */}
-            {microcopy && (
+            {/* Microcopy — only in "Ahora" group for pending entries, skip notes */}
+            {microcopy && entry.type !== 'note' && (
               <p style={{
                 margin: '2px 0 0',
                 fontSize: '10px',
@@ -903,38 +936,42 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                   {whenLabel}
                 </span>
               )}
-              {amountLabel && !isShoppingList && (
-                <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#c9a882' }}>
-                  {amountLabel}
-                </span>
-              )}
-              {isPayment && statusText && (
-                <span
-                  style={{
-                    fontSize: '10px',
-                    padding: '2px 7px',
-                    borderRadius: '999px',
-                    color: statusText === 'vencido' ? '#c47070' : statusText === 'pendiente' ? '#b8944e' : '#7a9e7e',
-                    background: statusText === 'vencido' ? 'rgba(196,112,112,0.08)' : statusText === 'pendiente' ? 'rgba(184,148,78,0.08)' : 'rgba(122,158,126,0.08)',
-                    border: '1px solid var(--divider)',
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {statusText}
-                </span>
-              )}
-              {isShoppingList && (
-                <ProgressLabel
-                  total={metaShopping ? shoppingItems.length : checklistItems.length}
-                  checked={metaShopping ? shoppingItems.filter((i) => i.checked).length : checklistItems.filter((i) => i.checked).length}
-                  totalEstimated={metaShopping?.progress.totalEstimated}
-                  totalChecked={metaShopping?.progress.totalChecked}
-                />
-              )}
-              {isPetOrHealth && priority !== 'normal' && (
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                  {priority === 'urgent' ? 'urgente' : 'importante'}
-                </span>
+              {entry.type !== 'note' && (
+                <>
+                  {amountLabel && !isShoppingList && (
+                    <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#c9a882' }}>
+                      {amountLabel}
+                    </span>
+                  )}
+                  {isPayment && statusText && (
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        padding: '2px 7px',
+                        borderRadius: '999px',
+                        color: statusText === 'vencido' ? '#c47070' : statusText === 'pendiente' ? '#b8944e' : '#7a9e7e',
+                        background: statusText === 'vencido' ? 'rgba(196,112,112,0.08)' : statusText === 'pendiente' ? 'rgba(184,148,78,0.08)' : 'rgba(122,158,126,0.08)',
+                        border: '1px solid var(--divider)',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {statusText}
+                    </span>
+                  )}
+                  {isShoppingList && (
+                    <ProgressLabel
+                      total={metaShopping ? shoppingItems.length : checklistItems.length}
+                      checked={metaShopping ? shoppingItems.filter((i) => i.checked).length : checklistItems.filter((i) => i.checked).length}
+                      totalEstimated={metaShopping?.progress.totalEstimated}
+                      totalChecked={metaShopping?.progress.totalChecked}
+                    />
+                  )}
+                  {isPetOrHealth && priority !== 'normal' && (
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                      {priority === 'urgent' ? 'urgente' : 'importante'}
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </button>
@@ -1037,18 +1074,10 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                     {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
                   </>
                 ) : entry.type === 'note' ? (
-                  <>
-                    {/* Only show Liev explanation when genuinely needed (low confidence / auto-corrected) */}
-                    {showCalmExplanation && calmExplanation && (
-                      <DetailLine label="Liev" value={calmExplanation} />
-                    )}
-                    {/* Show note body directly without a "Detalle original" label */}
-                    {showOriginalText && detailOriginal && (
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                        {detailOriginal}
-                      </p>
-                    )}
-                  </>
+                  // TODO(Fase 2): replace inline expand with shared NoteReader overlay
+                  <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
+                    {entry.text}
+                  </p>
                 ) : (
                   <>
                     {showCalmExplanation && calmExplanation && <DetailLine label="Liev" value={calmExplanation} />}
@@ -1057,7 +1086,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                     {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
                   </>
                 )}
-                {showCorrectionHint && correctionHint && (
+                {showCorrectionHint && correctionHint && entry.type !== 'note' && (
                   <p style={{
                     margin: '4px 0 0',
                     fontSize: '10px',
