@@ -681,6 +681,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
         alignItems: 'flex-start',
         opacity: entry.done ? 0.42 : 1,
         transition: 'opacity 0.2s ease',
+        maxHeight: entry.type === 'note' ? 152 : undefined,
+        overflow: entry.type === 'note' ? 'hidden' : undefined,
       }}
     >
       {/* Done circle */}
@@ -736,15 +738,15 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
         ) : (
           <button
             type="button"
-            onClick={() => setExpanded((p) => !p)}
-            aria-expanded={expanded}
+            onClick={entry.type === 'note' ? undefined : () => setExpanded((p) => !p)}
+            aria-expanded={entry.type === 'note' ? undefined : expanded}
             style={{
               width: '100%',
               background: 'transparent',
               border: 'none',
               padding: 0,
               textAlign: 'left',
-              cursor: 'pointer',
+              cursor: entry.type === 'note' ? 'default' : 'pointer',
             }}
           >
             {entry.type === 'note' ? (
@@ -978,129 +980,127 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
         )}
 
         {/* Expanded section — outside the button so interactive elements are valid */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateRows: expanded ? '1fr' : '0fr',
-            transition: 'grid-template-rows 0.22s ease',
-            marginTop: expanded ? '10px' : 0,
-          }}
-        >
-          <div style={{ overflow: 'hidden' }}>
-            {expanded && (
-              <div
-                style={{
-                  borderTop: '1px solid var(--divider)',
-                  paddingTop: '10px',
-                  display: 'grid',
-                  gap: '7px',
-                }}
-              >
-                {isShoppingList ? (
-                  <div style={{ display: 'grid', gap: '2px' }}>
-                    {metaShopping ? (
-                      shoppingItems.length === 0 ? (
-                        <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Lista sin ítems</p>
+        {/* TODO(Fase 2): open NoteReader overlay on tap instead of inline expand */}
+        {entry.type !== 'note' && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateRows: expanded ? '1fr' : '0fr',
+              transition: 'grid-template-rows 0.22s ease',
+              marginTop: expanded ? '10px' : 0,
+            }}
+          >
+            <div style={{ overflow: 'hidden' }}>
+              {expanded && (
+                <div
+                  style={{
+                    borderTop: '1px solid var(--divider)',
+                    paddingTop: '10px',
+                    display: 'grid',
+                    gap: '7px',
+                  }}
+                >
+                  {isShoppingList ? (
+                    <div style={{ display: 'grid', gap: '2px' }}>
+                      {metaShopping ? (
+                        shoppingItems.length === 0 ? (
+                          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Lista sin ítems</p>
+                        ) : (
+                          <>
+                            {shoppingItems.map((item) => (
+                              <MetadataChecklistRow
+                                key={item.id}
+                                item={item}
+                                onToggle={() => entry.id !== undefined && toggleShoppingItem(entry.id, item.id)}
+                              />
+                            ))}
+                            {metaShopping.progress.totalEstimated > 0 && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  marginTop: '6px',
+                                  paddingTop: '6px',
+                                  borderTop: '1px solid var(--divider)',
+                                }}
+                              >
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                  {metaShopping.progress.totalChecked > 0 ? 'Comprado' : 'Total estimado'}
+                                </span>
+                                <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: '#c9a882', fontWeight: 600 }}>
+                                  {metaShopping.progress.totalChecked > 0
+                                    ? `${formatCLP(metaShopping.progress.totalChecked)} / ${formatCLP(metaShopping.progress.totalEstimated)}`
+                                    : formatCLP(metaShopping.progress.totalEstimated)}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        )
+                      ) : checklistItems.length === 0 ? (
+                        <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Sin ítems detectados</p>
                       ) : (
-                        <>
-                          {shoppingItems.map((item) => (
-                            <MetadataChecklistRow
-                              key={item.id}
-                              item={item}
-                              onToggle={() => entry.id !== undefined && toggleShoppingItem(entry.id, item.id)}
-                            />
-                          ))}
-                          {metaShopping.progress.totalEstimated > 0 && (
-                            <div
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginTop: '6px',
-                                paddingTop: '6px',
-                                borderTop: '1px solid var(--divider)',
-                              }}
-                            >
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                {metaShopping.progress.totalChecked > 0 ? 'Comprado' : 'Total estimado'}
-                              </span>
-                              <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: '#c9a882', fontWeight: 600 }}>
-                                {metaShopping.progress.totalChecked > 0
-                                  ? `${formatCLP(metaShopping.progress.totalChecked)} / ${formatCLP(metaShopping.progress.totalEstimated)}`
-                                  : formatCLP(metaShopping.progress.totalEstimated)}
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      )
-                    ) : checklistItems.length === 0 ? (
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Sin ítems detectados</p>
-                    ) : (
-                      checklistItems.map((item) => (
-                        <ChecklistRow key={item.localId} item={item} onToggle={onToggleItem} />
-                      ))
-                    )}
-                    {showOriginalText && detailOriginal && (
-                      <p style={{ margin: '8px 0 0', fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                        {detailOriginal}
-                      </p>
-                    )}
-                  </div>
-                ) : isCalendar ? (
-                  <CalendarDetail entry={entry} />
-                ) : isPayment ? (
-                  <>
-                    {showCalmExplanation && (
-                      <DetailLine label="Liev" value={
-                      getFinancialDirection(entry) === 'income'
-                        ? 'Ingreso registrado'
-                        : (calmExplanation ?? 'Pago pendiente')
-                      } />
-                    )}
-                    <DetailLine label="Monto" value={amountLabel} />
-                    <DetailLine label="Cuándo" value={whenLabel} />
-                    <DetailLine label="Tipo" value={`${getFinancialDirection(entry) === 'income' ? 'ingreso' : 'egreso'} / ${getFinancialCategory(entry)}`} />
-                    <DetailLine label="Estado" value={statusText} />
-                    <DetailLine label="Próximo paso" value={getFinancialDirection(entry) === 'income' ? 'dejarlo registrado si ya entró' : 'marcar como pagado cuando lo resuelvas'} />
-                    {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
-                  </>
-                ) : isPetOrHealth ? (
-                  <>
-                    {showCalmExplanation && (
-                      <DetailLine label="Liev" value={calmExplanation ?? (entry.type === 'pet' ? 'Cuidado de mascota' : 'Cuidado personal')} />
-                    )}
-                    <DetailLine label="Cuándo" value={whenLabel} />
-                    <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
-                    {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
-                  </>
-                ) : entry.type === 'note' ? (
-                  // TODO(Fase 2): replace inline expand with shared NoteReader overlay
-                  <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
-                    {entry.text}
-                  </p>
-                ) : (
-                  <>
-                    {showCalmExplanation && calmExplanation && <DetailLine label="Liev" value={calmExplanation} />}
-                    <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
-                    <DetailLine label="Cuándo" value={whenLabel} />
-                    {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
-                  </>
-                )}
-                {showCorrectionHint && correctionHint && entry.type !== 'note' && (
-                  <p style={{
-                    margin: '4px 0 0',
-                    fontSize: '10px',
-                    color: 'var(--text-muted)',
-                    lineHeight: 1.5,
-                    fontStyle: 'italic',
-                  }}>
-                    {correctionHint}
-                  </p>
-                )}
-              </div>
-            )}
+                        checklistItems.map((item) => (
+                          <ChecklistRow key={item.localId} item={item} onToggle={onToggleItem} />
+                        ))
+                      )}
+                      {showOriginalText && detailOriginal && (
+                        <p style={{ margin: '8px 0 0', fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                          {detailOriginal}
+                        </p>
+                      )}
+                    </div>
+                  ) : isCalendar ? (
+                    <CalendarDetail entry={entry} />
+                  ) : isPayment ? (
+                    <>
+                      {showCalmExplanation && (
+                        <DetailLine label="Liev" value={
+                        getFinancialDirection(entry) === 'income'
+                          ? 'Ingreso registrado'
+                          : (calmExplanation ?? 'Pago pendiente')
+                        } />
+                      )}
+                      <DetailLine label="Monto" value={amountLabel} />
+                      <DetailLine label="Cuándo" value={whenLabel} />
+                      <DetailLine label="Tipo" value={`${getFinancialDirection(entry) === 'income' ? 'ingreso' : 'egreso'} / ${getFinancialCategory(entry)}`} />
+                      <DetailLine label="Estado" value={statusText} />
+                      <DetailLine label="Próximo paso" value={getFinancialDirection(entry) === 'income' ? 'dejarlo registrado si ya entró' : 'marcar como pagado cuando lo resuelvas'} />
+                      {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
+                    </>
+                  ) : isPetOrHealth ? (
+                    <>
+                      {showCalmExplanation && (
+                        <DetailLine label="Liev" value={calmExplanation ?? (entry.type === 'pet' ? 'Cuidado de mascota' : 'Cuidado personal')} />
+                      )}
+                      <DetailLine label="Cuándo" value={whenLabel} />
+                      <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
+                      {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
+                    </>
+                  ) : (
+                    <>
+                      {showCalmExplanation && calmExplanation && <DetailLine label="Liev" value={calmExplanation} />}
+                      <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
+                      <DetailLine label="Cuándo" value={whenLabel} />
+                      {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
+                    </>
+                  )}
+                  {showCorrectionHint && correctionHint && (
+                    <p style={{
+                      margin: '4px 0 0',
+                      fontSize: '10px',
+                      color: 'var(--text-muted)',
+                      lineHeight: 1.5,
+                      fontStyle: 'italic',
+                    }}>
+                      {correctionHint}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Pin + edit + delete */}
