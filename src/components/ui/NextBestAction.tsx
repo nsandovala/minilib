@@ -48,8 +48,6 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
     setTimeout(() => { el.style.outline = ''; }, 900);
   }, []);
 
-  if (top.length === 0) return null;
-
   return (
     <div style={{ padding: '0 20px 8px' }}>
       <p style={{
@@ -63,6 +61,11 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
         Ahora
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        {top.length === 0 && (
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', padding: '8px 4px' }}>
+            Sin acciones urgentes
+          </p>
+        )}
         {top.map((entry) => {
           const displayType     = getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry);
           const correctionHint  = getAgentForType(entry.type)?.ui.correctionHint ?? null;

@@ -36,6 +36,8 @@ import {
   shouldShowOriginalText,
 } from '@/core/display/display-rules';
 import { getPrimarySurface } from '@/core/display/surface-resolver';
+import NoteReader from '@/components/notes/NoteReader';
+import NoteEditor from '@/components/notes/NoteEditor';
 
 interface TimelineViewProps {
   entries: TimelineEntry[];
@@ -422,6 +424,9 @@ export default function TimelineView({ entries, onRefresh, currentSurface }: Tim
     [entries, pinnedIds],
   );
 
+  const [readingNote, setReadingNote] = useState<TimelineEntry | null>(null);
+  const [editingNote, setEditingNote] = useState<TimelineEntry | null>(null);
+
   if (timeline.isEmpty) {
     return (
       <div className="empty-state" style={{ padding: '40px 24px' }}>
@@ -436,21 +441,51 @@ export default function TimelineView({ entries, onRefresh, currentSurface }: Tim
   }
 
   return (
-    <div style={{ padding: '14px 20px 24px' }}>
-      {timeline.groups.map((group) => (
-        <TimelineGroup
-          key={group.key}
-          label={group.label}
-          entries={group.entries}
-          groupKey={group.key}
-          collapsedLimit={group.key === 'completed' ? 3 : undefined}
-          checklistByEntry={checklistByEntry}
-          onToggleItem={handleToggleItem}
-          onAction={onRefresh}
-          currentSurface={currentSurface}
+    <>
+      <div style={{ padding: '14px 20px 24px' }}>
+        {timeline.groups.map((group) => (
+          <TimelineGroup
+            key={group.key}
+            label={group.label}
+            entries={group.entries}
+            groupKey={group.key}
+            collapsedLimit={group.key === 'completed' ? 3 : undefined}
+            checklistByEntry={checklistByEntry}
+            onToggleItem={handleToggleItem}
+            onAction={onRefresh}
+            currentSurface={currentSurface}
+            onReadNote={setReadingNote}
+          />
+        ))}
+      </div>
+
+      {readingNote && (
+        <NoteReader
+          note={readingNote}
+          onEdit={(note) => {
+            setReadingNote(null);
+            setEditingNote(note);
+          }}
+          onDelete={async (id) => {
+            await deleteEntry(id);
+            setReadingNote(null);
+            onRefresh();
+          }}
+          onClose={() => setReadingNote(null)}
         />
-      ))}
-    </div>
+      )}
+
+      {editingNote && (
+        <NoteEditor
+          note={editingNote}
+          onSave={() => {
+            setEditingNote(null);
+            onRefresh();
+          }}
+          onCancel={() => setEditingNote(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -465,9 +500,10 @@ interface TimelineGroupProps {
   groupKey?: CognitiveGroupKey;
   collapsedLimit?: number;
   currentSurface?: string;
+  onReadNote?: (note: TimelineEntry) => void;
 }
 
-function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onAction, groupKey, collapsedLimit, currentSurface }: TimelineGroupProps) {
+function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onAction, groupKey, collapsedLimit, currentSurface, onReadNote }: TimelineGroupProps) {
   const [showAll, setShowAll] = useState(false);
 
   const deduped = entries.filter((entry, index, arr) => {
@@ -516,6 +552,7 @@ function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onActio
             onAction={onAction}
             groupKey={groupKey}
             currentSurface={currentSurface}
+            onReadNote={onReadNote}
           />
         ))}
       </div>
@@ -550,9 +587,10 @@ interface TimelineItemProps {
   onAction: () => void;
   groupKey?: CognitiveGroupKey;
   currentSurface?: string;
+  onReadNote?: (note: TimelineEntry) => void;
 }
 
-function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey, currentSurface }: TimelineItemProps) {
+function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey, currentSurface, onReadNote }: TimelineItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(entry.text);
@@ -738,7 +776,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
         ) : (
           <button
             type="button"
-            onClick={entry.type === 'note' ? undefined : () => setExpanded((p) => !p)}
+            onClick={entry.type === 'note' ? () => onReadNote?.(entry) : () => setExpanded((p) => !p)}
             aria-expanded={entry.type === 'note' ? undefined : expanded}
             style={{
               width: '100%',
@@ -746,7 +784,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
               border: 'none',
               padding: 0,
               textAlign: 'left',
-              cursor: entry.type === 'note' ? 'default' : 'pointer',
+              cursor: entry.type === 'note' ? 'pointer' : 'pointer',
             }}
           >
             {entry.type === 'note' ? (
