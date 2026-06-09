@@ -653,8 +653,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
   // Collapsed checklist preview (first 3 unchecked items)
   const collapsedItems = isShoppingList
     ? metaShopping
-      ? sortedMetaShoppingItems.slice(0, 3)
-      : sortedChecklistItems.slice(0, 3)
+      ? sortedMetaShoppingItems.slice(0, 1)
+      : sortedChecklistItems.slice(0, 1)
     : [];
 
   const microcopy = groupKey === 'now' ? getMicrocopy(entry) : null;
@@ -675,7 +675,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
       id={`timeline-entry-${entry.localId}`}
       className="glass-card"
       style={{
-        padding: '13px 14px',
+        padding: '14px 16px',
         display: 'flex',
         gap: '10px',
         alignItems: 'flex-start',
@@ -797,9 +797,9 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
             {/* Microcopy — only in "Ahora" group for pending entries */}
             {microcopy && (
               <p style={{
-                margin: '3px 0 0',
+                margin: '2px 0 0',
                 fontSize: '10px',
-                color: microcopy.startsWith('vencido') ? 'rgba(196,112,112,0.6)' : 'rgba(201,168,130,0.5)',
+                color: microcopy.startsWith('vencido') ? 'rgba(196,112,112,0.5)' : 'rgba(201,168,130,0.4)',
                 paddingLeft: '0',
                 lineHeight: 1.3,
               }}>
@@ -809,14 +809,14 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
 
             {/* Shopping list: category tag */}
             {isShoppingList && checklistCategory && (
-              <p style={{ margin: '3px 0 0', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.35 }}>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.35 }}>
                 {checklistCategory}
               </p>
             )}
 
             {/* Collapsed checklist preview */}
             {isShoppingList && !expanded && collapsedItems.length > 0 && (
-              <div style={{ display: 'grid', gap: '4px', marginTop: '8px', paddingLeft: '2px' }}>
+              <div style={{ display: 'grid', gap: '3px', marginTop: '6px', paddingLeft: '2px' }}>
                 {metaShopping
                   ? collapsedItems.map((item) => (
                       <div key={(item as { id: string }).id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -883,21 +883,21 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                       </div>
                     ))}
                 {metaShopping
-                  ? shoppingItems.length > 3 && (
+                  ? shoppingItems.length > 1 && (
                       <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>
-                        +{shoppingItems.length - 3} más
+                        +{shoppingItems.length - 1} más
                       </p>
                     )
-                  : checklistItems.length > 3 && (
+                  : checklistItems.length > 1 && (
                       <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>
-                        +{checklistItems.length - 3} más
+                        +{checklistItems.length - 1} más
                       </p>
                     )}
               </div>
             )}
 
             {/* Meta row: date/amount/status/progress */}
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '6px' }}>
               {whenLabel && (
                 <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: checkOverdue(entry) ? '#c47070' : 'var(--text-secondary)' }}>
                   {whenLabel}

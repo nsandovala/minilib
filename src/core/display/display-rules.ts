@@ -100,7 +100,7 @@ function hasLowConfidence(entry: TimelineEntry): boolean {
   const entryConfidence = getMetadataNumber(entry, 'confidence');
   const parserConfidence = getMetadataNumber(entry, 'parserConfidence');
   const confidence = entryConfidence ?? parserConfidence;
-  return confidence !== null && confidence < 0.8;
+  return confidence !== null && confidence < 0.5;
 }
 
 function wasAutoCorrected(entry: TimelineEntry): boolean {

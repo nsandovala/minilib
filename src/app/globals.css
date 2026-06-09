@@ -45,7 +45,7 @@
     --accent-amber: var(--accent-warning);
     --radius-sm: 10px;
     --radius-md: 14px;
-    --radius-lg: 18px;
+    --radius-lg: 16px;
     --font: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'Geist Mono', 'Fira Code', monospace;
     --divider: rgba(255, 248, 240, 0.08);
@@ -333,11 +333,14 @@
   html[data-theme="light"] .home-profile-shell {
     position: relative;
     background-color: var(--bg-app);
-    background:
+    background-image:
+      url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'><path d='M40,200 Q20,100 70,40 Q120,100 100,200 Z' fill='rgba(180,140,90,0.035)'/><path d='M160,180 Q200,100 160,30 Q120,100 160,180 Z' fill='rgba(140,110,70,0.025)'/><path d='M80,80 Q110,40 140,80 Q110,120 80,80 Z' fill='rgba(190,150,100,0.02)'/></svg>"),
       radial-gradient(circle at 80% 4%, rgba(190, 145, 75, 0.14), transparent 22%),
       radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.85), transparent 28%),
       radial-gradient(circle at 2% 2%, rgba(255, 250, 240, 0.65), transparent 32%),
       linear-gradient(180deg, #fbfaf7 0%, #f7f1e7 46%, #efe3d0 100%);
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+    background-size: 240px 240px, auto, auto, auto, auto;
   }
 
   html[data-theme="light"] .home-profile-shell::before {
@@ -489,6 +492,46 @@
     color: var(--text-muted);
     font-size: 13px;
     line-height: 1.6;
+  }
+
+  .preview-fade {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .preview-fade::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    background: linear-gradient(transparent, var(--bg-card));
+    pointer-events: none;
+  }
+
+  .note-action-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.35;
+    transition: opacity 0.15s ease;
+    color: var(--text-secondary);
+  }
+
+  .note-action-btn:hover {
+    opacity: 0.85;
+  }
+
+  .note-action-btn-danger:hover {
+    opacity: 0.85;
+    color: var(--accent-danger);
   }
 }
 

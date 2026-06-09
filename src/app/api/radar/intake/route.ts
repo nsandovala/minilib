@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { buildHeuristicRadarResult, normalizeRadarResult } from '@/core/cognitive/normalize-radar-result';
+import { buildHeuristicRadarResult, normalizeRadarResult, shouldUseAI } from '@/core/cognitive/normalize-radar-result';
 import type { RadarCardContract } from '@/core/contracts/card-contracts';
 
 const MAX_TEXT_LENGTH = 2000;
@@ -160,10 +160,9 @@ function logRadarContract(text: string, data: RadarCardContract, fallbackUsed: b
   });
 }
 
-function heuristicResponse(text: string, reason: string) {
-  const fallback = buildHeuristicRadarResult(text);
-  logRadarContract(text, fallback, true, true);
-  return NextResponse.json({ ...fallback, reason }, { status: 200 });
+function localFallbackResponse(text: string, localData: RadarCardContract, reason: string) {
+  logRadarContract(text, localData, true, true);
+  return NextResponse.json({ ...localData, reason }, { status: 200 });
 }
 
 // ─── OpenRouter fetch helper ──────────────────────────────────────────────────
@@ -212,9 +211,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'text_too_long' }, { status: 400 });
     }
 
+    // ─── Local-first: try heuristic before AI ─────────────────────────────────
+    const localCandidate = buildHeuristicRadarResult(text);
+    const localResult = normalizeRadarResult(localCandidate, text);
+
+    if (!localResult.ok || !localResult.data) {
+      return NextResponse.json({ error: 'local_parsing_failed' }, { status: 500 });
+    }
+
+    if (!shouldUseAI(text, localResult.data)) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.info('[radar] local-first hit', {
+          inputLength: text.length,
+          detectedType: localResult.data.type,
+          confidence: localResult.data.confidence,
+          itemCount: localResult.data.checklist_items.length,
+          dateText: localResult.data.date_text,
+          amount: localResult.data.amount,
+        });
+      }
+      logRadarContract(text, localResult.data, false, true);
+      return NextResponse.json(localResult.data);
+    }
+
+    // ─── OpenRouter path (ambiguous cases only) ────────────────────────────────
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey || !OPENROUTER_MODEL) {
-      return heuristicResponse(text, 'openrouter_not_configured');
+      return localFallbackResponse(text, localResult.data, 'openrouter_not_configured');
     }
 
     let orRes = await openRouterFetch(OPENROUTER_MODEL, text, apiKey);
@@ -240,11 +263,11 @@ export async function POST(req: NextRequest) {
               messageLength: fallbackErrBody.length,
             });
           }
-          return heuristicResponse(text, 'openrouter_provider_error');
+          return localFallbackResponse(text, localResult.data, 'openrouter_provider_error');
         }
       } else {
         if ([400, 401, 403, 404, 429].includes(orRes.status)) {
-          return heuristicResponse(text, 'openrouter_provider_error');
+          return localFallbackResponse(text, localResult.data, 'openrouter_provider_error');
         }
         return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
       }
@@ -253,12 +276,12 @@ export async function POST(req: NextRequest) {
     const orData = await orRes.json() as { choices?: { message?: { content?: unknown } }[] };
     const content = orData?.choices?.[0]?.message?.content;
     if (typeof content !== 'string' || !content) {
-      return heuristicResponse(text, 'empty_response');
+      return localFallbackResponse(text, localResult.data, 'empty_response');
     }
 
     const parsed = extractJson(content);
     if (!parsed) {
-      return heuristicResponse(text, 'invalid_json');
+      return localFallbackResponse(text, localResult.data, 'invalid_json');
     }
 
     const result = normalizeRadarResult(parsed, text);
@@ -271,7 +294,7 @@ export async function POST(req: NextRequest) {
           issueCount: result.issues.length,
         });
       }
-      return heuristicResponse(text, 'invalid_ai_payload');
+      return localFallbackResponse(text, localResult.data, 'invalid_ai_payload');
     }
 
     logRadarContract(text, result.data, result.fallbackUsed, true);
@@ -281,7 +304,10 @@ export async function POST(req: NextRequest) {
       err instanceof Error &&
       (err.name === 'AbortError' || err.name === 'TimeoutError')
     ) {
-      if (requestText) return heuristicResponse(requestText, 'timeout');
+      if (requestText) {
+        const localFallback = buildHeuristicRadarResult(requestText);
+        return localFallbackResponse(requestText, localFallback, 'timeout');
+      }
       return NextResponse.json({ error: 'timeout' }, { status: 200 });
     }
     return NextResponse.json({ error: 'internal_error' }, { status: 500 });

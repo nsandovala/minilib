@@ -1,5 +1,5 @@
 import { RadarCardSchema, type ContractEntryType, type ContractStoreType, type RadarCardContract } from '../contracts/card-contracts.ts';
-import { hasHealthIntent, hasPaymentIntent, hasPetAction, hasShoppingIntent } from '../agents/parser-rules.ts';
+import { hasHealthIntent, hasPaymentIntent, hasPetAction, hasShoppingIntent, isLongFormNote } from '../agents/parser-rules.ts';
 
 const TYPE_TO_SURFACE: Record<ContractEntryType, RadarCardContract['surface']> = {
   shopping_list: 'purchases',
@@ -237,6 +237,121 @@ export function normalizeRadarResult(raw: unknown, rawText: string): {
   };
 }
 
+function computeHeuristicConfidence(text: string, type: ContractEntryType, items: string[], amount: number | null, storeType: ContractStoreType): number {
+  const lower = text.toLowerCase();
+
+  // Casos claros: confidence alto
+  if (type === 'shopping_list') {
+    const hasStore = storeType !== 'otro';
+    const hasExplicitList = /\blista\b|[,;/]|\s+y\s+/i.test(text);
+    if (items.length >= 3 && hasStore && hasExplicitList) return 0.92;
+    if (items.length >= 2 && (hasStore || hasExplicitList)) return 0.88;
+    if (items.length >= 2) return 0.85;
+    if (items.length === 1 && hasStore) return 0.82;
+    return 0.75;
+  }
+
+  if (type === 'payment') {
+    if (amount !== null) {
+      const hasExplicitVerb = /\b(pagar|pago|mensualidad|cuenta|factura|suscripci[oó]n)\b/i.test(text);
+      if (hasExplicitVerb) return 0.90;
+      return 0.85;
+    }
+    // Payment sin monto: ambiguo
+    return 0.72;
+  }
+
+  if (type === 'appointment' || type === 'calendar') {
+    const hasTime = /\b\d{1,2}:\d{2}\b/.test(text);
+    const hasDate = /\b(hoy|mañana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/i.test(text);
+    if (hasTime && hasDate) return 0.88;
+    if (hasTime || hasDate) return 0.85;
+    return 0.78;
+  }
+
+  if (type === 'health') {
+    const hasTime = /\b\d{1,2}:\d{2}\b/.test(text);
+    const hasDate = /\b(hoy|mañana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/i.test(text);
+    if (hasTime && hasDate) return 0.88;
+    if (hasTime || hasDate) return 0.85;
+    return 0.82;
+  }
+
+  if (type === 'pet') {
+    const hasTime = /\b\d{1,2}:\d{2}\b/.test(text);
+    const hasDate = /\b(hoy|mañana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/i.test(text);
+    if (hasTime && hasDate) return 0.88;
+    if (hasTime || hasDate) return 0.85;
+    return 0.82;
+  }
+
+  if (type === 'task') {
+    const hasActionVerb = /\b(buscar|hacer|llevar|sacar|revisar|comprar|ir|dar)\b/i.test(text);
+    const hasDate = /\b(hoy|mañana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/i.test(text);
+    if (hasActionVerb && hasDate) return 0.84;
+    if (hasActionVerb) return 0.80;
+    return 0.72;
+  }
+
+  // note
+  if (isLongFormNote(text)) return 0.55;
+  if (text.length > 120) return 0.70;
+  if (hasShoppingIntent(text) || hasPaymentIntent(text) || hasHealthIntent(text) || hasPetAction(text)) return 0.65;
+  return 0.80;
+}
+
+function hasYearWithoutFinancialContext(text: string): boolean {
+  const yearMatch = text.match(/\b(19\d{2}|20\d{2})\b/);
+  if (!yearMatch) return false;
+  return !hasFinancialContext(text);
+}
+
+export function shouldUseAI(text: string, localResult: RadarCardContract): boolean {
+  // Siempre IA para contenido largo/estructurado
+  if (isLongFormNote(text)) return true;
+
+  // Año en contexto no-financiero → riesgo de confusión amount/año
+  if (hasYearWithoutFinancialContext(text)) return true;
+
+  // Si confidence es suficiente, no usar IA
+  if (localResult.confidence >= 0.82) return false;
+
+  const lower = text.toLowerCase();
+
+  // shopping_list sin items suficientes o sin contexto claro
+  if (localResult.type === 'shopping_list') {
+    if (localResult.checklist_items.length < 2) return true;
+    if (localResult.storeType === 'otro' && !/\b(comprar|lista|super|mercado|feria|farmacia)\b/i.test(text)) return true;
+  }
+
+  // payment sin monto explícito
+  if (localResult.type === 'payment' && localResult.amount === null) return true;
+
+  // note con señales mixtas de otras categorías
+  if (localResult.type === 'note') {
+    const hasOtherSignal = hasShoppingIntent(text) || hasPaymentIntent(text) || hasHealthIntent(text) || hasPetAction(text);
+    if (hasOtherSignal) return true;
+  }
+
+  // Múltiples intenciones detectadas → ambiguo
+  const intentCount = [
+    hasShoppingIntent(text),
+    hasPaymentIntent(text),
+    hasHealthIntent(text),
+    hasPetAction(text),
+    /\b(reunion|cumple|evento|cita|agenda|agendar|junta|partido)\b/i.test(text),
+  ].filter(Boolean).length;
+  if (intentCount > 1) return true;
+
+  // Texto largo con note pero con posible intención oculta
+  if (localResult.type === 'note' && text.length > 80 && /\b(para|necesito|tengo que|debo|hay que)\b/i.test(text)) return true;
+
+  // checklist vacío cuando parece lista
+  if (/\b(comprar|lista|super|mercado|feria|farmacia)\b/i.test(text) && localResult.checklist_items.length === 0) return true;
+
+  return false;
+}
+
 export function buildHeuristicRadarResult(rawText: string): RadarCardContract {
   const normalized = normalizeRadarResult({}, rawText);
   if (!normalized.data) {
@@ -261,5 +376,19 @@ export function buildHeuristicRadarResult(rawText: string): RadarCardContract {
       metadata: {},
     });
   }
-  return normalized.data;
+
+  // Recalcular confidence basado en heurística
+  const confidence = computeHeuristicConfidence(
+    rawText,
+    normalized.data.type,
+    normalized.data.checklist_items,
+    normalized.data.amount,
+    normalized.data.storeType ?? 'otro',
+  );
+
+  return {
+    ...normalized.data,
+    confidence,
+    reason: 'heuristic-local',
+  };
 }

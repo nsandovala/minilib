@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildHeuristicRadarResult, normalizeRadarResult } from '../src/core/cognitive/normalize-radar-result.ts';
+import { buildHeuristicRadarResult, normalizeRadarResult, shouldUseAI } from '../src/core/cognitive/normalize-radar-result.ts';
 
 // ─── Inline mirrors of src/lib/radar.ts pure logic ───────────────────────────
 // (Cannot import TypeScript files that use @/ aliases directly in Node test runner)
@@ -610,4 +610,103 @@ test('D: gym el miércoles → surface appointments, amount null, time preservad
   assert.equal(normalized.time, '19:30');
   assert.equal(normalized.amount, null);
   assert.equal(normalized.surface, 'appointments', 'surface "calendar" debe corregirse a "appointments"');
+});
+
+// ─── Local-first: shouldUseAI ─────────────────────────────────────────────────
+
+test('shouldUseAI: shopping_list con 3 items y minimarket → NO IA', () => {
+  const result = buildHeuristicRadarResult('sábado comprar pan leche bebida en minimarket');
+  assert.equal(result.type, 'shopping_list');
+  assert.ok(result.confidence >= 0.82, `confidence ${result.confidence} debe ser >= 0.82`);
+  assert.equal(shouldUseAI('sábado comprar pan leche bebida en minimarket', result), false);
+});
+
+test('shouldUseAI: payment con amount y palabra pago → NO IA', () => {
+  const result = buildHeuristicRadarResult('pago google one 21000');
+  assert.equal(result.type, 'payment');
+  assert.equal(result.amount, 21000);
+  assert.ok(result.confidence >= 0.82, `confidence ${result.confidence} debe ser >= 0.82`);
+  assert.equal(shouldUseAI('pago google one 21000', result), false);
+});
+
+test('shouldUseAI: appointment con date_text y time → NO IA', () => {
+  const result = buildHeuristicRadarResult('médico miércoles a las 15:30');
+  assert.ok(result.type === 'appointment' || result.type === 'health');
+  assert.equal(result.time, '15:30');
+  assert.ok(result.confidence >= 0.82, `confidence ${result.confidence} debe ser >= 0.82`);
+  assert.equal(shouldUseAI('médico miércoles a las 15:30', result), false);
+});
+
+test('shouldUseAI: pet claro → NO IA', () => {
+  const result = buildHeuristicRadarResult('pastilla para la gata Luna lunes 9am');
+  assert.equal(result.type, 'pet');
+  assert.ok(result.confidence >= 0.82, `confidence ${result.confidence} debe ser >= 0.82`);
+  assert.equal(shouldUseAI('pastilla para la gata Luna lunes 9am', result), false);
+});
+
+test('shouldUseAI: note simple → NO IA', () => {
+  const result = buildHeuristicRadarResult('recordar llamar a mamá');
+  assert.equal(result.type, 'note');
+  assert.ok(result.confidence >= 0.80, `confidence ${result.confidence} debe ser >= 0.80`);
+  assert.equal(shouldUseAI('recordar llamar a mamá', result), false);
+});
+
+test('shouldUseAI: note con señales mixtas → SÍ IA', () => {
+  const result = buildHeuristicRadarResult('buscar vuelos diciembre 2026 para luna de miel');
+  assert.ok(result.type === 'task' || result.type === 'note');
+  assert.ok(shouldUseAI('buscar vuelos diciembre 2026 para luna de miel', result), 'debe usar IA por intención mixta con año');
+});
+
+test('shouldUseAI: shopping_list sin items → SÍ IA', () => {
+  const result = buildHeuristicRadarResult('ir al super');
+  assert.ok(result.type === 'note' || result.type === 'task' || result.type === 'shopping_list');
+  assert.ok(shouldUseAI('ir al super', result), 'debe usar IA porque no hay items claros');
+});
+
+test('shouldUseAI: payment sin monto → SÍ IA', () => {
+  const result = buildHeuristicRadarResult('pagar la cuenta del agua');
+  // Sin monto explícito, la heurística lo clasifica como note con señal de pago
+  assert.ok(result.type === 'note' || result.type === 'payment');
+  assert.equal(result.amount, null);
+  assert.ok(shouldUseAI('pagar la cuenta del agua', result), 'debe usar IA porque no hay monto');
+});
+
+test('shouldUseAI: texto largo conceptual → SÍ IA', () => {
+  const text = 'Implementar integración con Google Calendar usando OAuth 2.0 y webhooks para sincronizar eventos automáticamente cada 15 minutos';
+  const result = buildHeuristicRadarResult(text);
+  assert.ok(shouldUseAI(text, result), 'debe usar IA porque es texto largo conceptual');
+});
+
+// ─── Casos específicos del prompt ─────────────────────────────────────────────
+
+test('caso específico: sábado comprar pan leche bebida en minimarket → shopping_list completa', () => {
+  const result = buildHeuristicRadarResult('sábado comprar pan leche bebida en minimarket');
+  assert.equal(result.type, 'shopping_list');
+  assert.equal(result.storeType, 'minimarket');
+  assert.deepEqual(result.checklist_items, ['pan', 'leche', 'bebida']);
+  assert.equal(result.date_text, 'sábado');
+  assert.equal(result.amount, null);
+  assert.ok(result.confidence >= 0.82);
+});
+
+test('caso específico: buscar vuelos para diciembre 2026 para luna de miel → NO amount', () => {
+  const result = buildHeuristicRadarResult('buscar vuelos para diciembre 2026 para luna de miel');
+  assert.equal(result.amount, null);
+  assert.notEqual(result.type, 'payment');
+});
+
+test('caso específico: pago google one 21000 → payment 21000', () => {
+  const result = buildHeuristicRadarResult('pago google one 21000');
+  assert.equal(result.type, 'payment');
+  assert.equal(result.amount, 21000);
+  assert.ok(result.confidence >= 0.82);
+});
+
+test('caso específico: médico miércoles a las 15:30 → appointment/calendar con time', () => {
+  const result = buildHeuristicRadarResult('médico miércoles a las 15:30');
+  assert.ok(result.type === 'appointment' || result.type === 'health');
+  assert.equal(result.date_text, 'miércoles');
+  assert.equal(result.time, '15:30');
+  assert.equal(result.amount, null);
+  assert.ok(result.confidence >= 0.82);
 });
