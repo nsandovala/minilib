@@ -74,6 +74,31 @@ export const RadarCardSchema = z.object({
   }).partial().catch({}),
 });
 
+/**
+ * Strict schema for AI responses — no .catch() fallbacks.
+ * If AI returns invalid data, we should know and fall back to heuristic.
+ */
+export const RadarCardSchemaStrict = z.object({
+  type: EntryTypeSchema,
+  surface: RadarSurfaceSchema,
+  title: z.string().min(1),
+  summary: z.string().nullable(),
+  date_text: z.string().nullable(),
+  dateISO: z.string().nullable(),
+  time: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
+  amount: z.number().positive().nullable(),
+  currency: z.literal('CLP').nullable(),
+  priority: z.enum(['low', 'normal', 'urgent']).nullable(),
+  status: z.enum(['pending', 'paid', 'completed']).nullable(),
+  store_context: z.string().nullable(),
+  storeType: StoreTypeSchema.nullable(),
+  checklist_items: z.array(z.string()),
+  tags: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+  reason: z.string().min(1),
+});
+
 export type ContractEntryType = z.infer<typeof EntryTypeSchema>;
 export type ContractStoreType = z.infer<typeof StoreTypeSchema>;
 export type RadarCardContract = z.infer<typeof RadarCardSchema>;
+export type RadarCardContractStrict = z.infer<typeof RadarCardSchemaStrict>;

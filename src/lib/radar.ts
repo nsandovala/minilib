@@ -106,7 +106,22 @@ export function radarToEntry(radar: RadarResult, rawText: string): ParsedEntry {
 
 // ─── Client helper ────────────────────────────────────────────────────────────
 
+let lastRequestTime = 0;
+const DEBOUNCE_MS = 3000;
+
 export async function radarIntake(text: string): Promise<RadarResult | null> {
+  // Offline guard: never call AI when offline
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return null;
+  }
+
+  // Debounce: prevent rapid-fire requests
+  const now = Date.now();
+  if (now - lastRequestTime < DEBOUNCE_MS) {
+    return null;
+  }
+  lastRequestTime = now;
+
   try {
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 5000);

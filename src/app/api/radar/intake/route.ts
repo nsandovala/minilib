@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildHeuristicRadarResult, normalizeRadarResult, shouldUseAI } from '@/core/cognitive/normalize-radar-result';
+import { RadarCardSchemaStrict } from '@/core/contracts/card-contracts';
 import type { RadarCardContract } from '@/core/contracts/card-contracts';
+import { rateLimit } from '@/lib/rate-limit';
 
 const MAX_TEXT_LENGTH = 2000;
 const OPENROUTER_MODEL          = process.env.OPENROUTER_MODEL;
@@ -211,6 +213,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'text_too_long' }, { status: 400 });
     }
 
+    // ─── Rate limiting ───────────────────────────────────────────────────────
+    const clientIp = req.headers.get('x-forwarded-for') ?? req.ip ?? 'unknown';
+    const limit = rateLimit(clientIp, { windowMs: 60_000, maxRequests: 20 });
+    if (!limit.allowed) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[radar] rate limit exceeded', { clientIp, remaining: limit.remaining });
+      }
+      return NextResponse.json({ error: 'rate_limited' }, { status: 429 });
+    }
+
     // ─── Local-first: try heuristic before AI ─────────────────────────────────
     const localCandidate = buildHeuristicRadarResult(text);
     const localResult = normalizeRadarResult(localCandidate, text);
@@ -284,21 +296,32 @@ export async function POST(req: NextRequest) {
       return localFallbackResponse(text, localResult.data, 'invalid_json');
     }
 
-    const result = normalizeRadarResult(parsed, text);
-    if (!result.ok || !result.data) {
+    // Try strict schema first — if AI returns garbage, we want to know
+    const strictResult = RadarCardSchemaStrict.safeParse(parsed);
+    if (!strictResult.success) {
       if (process.env.NODE_ENV !== 'production') {
-        console.warn('[radar] Zod validation failed', {
+        console.warn('[radar] AI response failed strict validation', {
           inputLength: text.length,
-          schemaValidationOk: false,
-          fallbackUsed: true,
-          issueCount: result.issues.length,
+          issues: strictResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
         });
       }
+      // Fallback to lenient normalization for partial data recovery
+      const lenientResult = normalizeRadarResult(parsed, text);
+      if (!lenientResult.ok || !lenientResult.data) {
+        return localFallbackResponse(text, localResult.data, 'invalid_ai_payload');
+      }
+      logRadarContract(text, lenientResult.data, true, true);
+      return NextResponse.json(lenientResult.data);
+    }
+
+    // Strict validation passed — normalize to fill computed fields
+    const normalized = normalizeRadarResult(strictResult.data, text);
+    if (!normalized.ok || !normalized.data) {
       return localFallbackResponse(text, localResult.data, 'invalid_ai_payload');
     }
 
-    logRadarContract(text, result.data, result.fallbackUsed, true);
-    return NextResponse.json(result.data);
+    logRadarContract(text, normalized.data, false, true);
+    return NextResponse.json(normalized.data);
   } catch (err) {
     if (
       err instanceof Error &&
