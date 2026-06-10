@@ -38,7 +38,6 @@ import {
 import { getPrimarySurface } from '@/core/display/surface-resolver';
 import NoteReader from '@/components/notes/NoteReader';
 import NoteEditor from '@/components/notes/NoteEditor';
-import SmartCard from '@/components/cards/SmartCard';
 
 interface TimelineViewProps {
   entries: TimelineEntry[];
@@ -711,9 +710,19 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
   const showOriginalText = shouldShowOriginalText(entry, displayContext);
 
   return (
-    <SmartCard
-      entry={entry}
-      onClick={entry.type === 'note' ? () => onReadNote?.(entry) : undefined}
+    <div
+      id={`timeline-entry-${entry.localId}`}
+      className="glass-card"
+      style={{
+        padding: '14px 16px',
+        display: 'flex',
+        gap: '10px',
+        alignItems: 'flex-start',
+        opacity: entry.done ? 0.42 : 1,
+        transition: 'opacity 0.2s ease',
+        maxHeight: entry.type === 'note' ? 152 : undefined,
+        overflow: entry.type === 'note' ? 'hidden' : undefined,
+      }}
     >
       {/* Done circle */}
       <button
@@ -1209,6 +1218,6 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
           </svg>
         </button>
       </div>
-    </SmartCard>
+    </div>
   );
 }
