@@ -3,106 +3,12 @@ import { buildHeuristicRadarResult, normalizeRadarResult, shouldUseAI } from '@/
 import { RadarCardSchemaStrict } from '@/core/contracts/card-contracts';
 import type { RadarCardContract } from '@/core/contracts/card-contracts';
 import { rateLimit } from '@/lib/rate-limit';
+import { OPENROUTER_MODELS, SYSTEM_PROMPT, trackCost } from '@/lib/openrouter';
 
 const MAX_TEXT_LENGTH = 2000;
-const OPENROUTER_MODEL          = process.env.OPENROUTER_MODEL;
-const OPENROUTER_FALLBACK_MODEL = process.env.OPENROUTER_FALLBACK_MODEL;
 
-// ─── Prompt ───────────────────────────────────────────────────────────────────
-
-const SYSTEM_PROMPT = `Eres un clasificador semántico de entradas cotidianas en español chileno.
-Recibes texto libre de un usuario y debes analizarlo para devolver SOLO JSON válido.
-
-REGLAS CRÍTICAS (obligatorias):
-- Responde SOLO con JSON válido. Sin markdown. Sin \`\`\`. Sin explicaciones fuera del JSON.
-- NUNCA inventes datos que el usuario no mencionó explícitamente.
-- NUNCA conviertas años en dinero. "2026", "2027", "2028" son años, no montos.
-  Solo detecta amount si hay "$", "CLP", "pesos", "luca", "lucas", "mil", "pagar", "pago", "mensualidad", "cuenta", "cobrar", "vale" u otro contexto financiero claro.
-- Las fechas (sábado, domingo, lunes, martes, miércoles, jueves, viernes, hoy, mañana) JAMÁS son checklist_items. Siempre van en date_text.
-- Los nombres de tiendas (supermercado, minimarket, farmacia, feria, mall, botillería, panadería) JAMÁS son checklist_items. Siempre van en store_context.
-
-Schema que debes devolver:
-{
-  "type": "note" | "task" | "shopping_list" | "payment" | "health" | "pet" | "calendar" | "home",
-  "surface": "notes" | "todos" | "purchases" | "payments" | "health" | "pets" | "appointments" | "home",
-  "title": string,
-  "summary": string | null,
-  "date_text": string | null,
-  "time": string | null,
-  "amount": number | null,
-  "currency": "CLP" | null,
-  "priority": "low" | "normal" | "urgent" | null,
-  "status": "pending" | "paid" | "completed" | null,
-  "store_context": string | null,
-  "storeType": "supermercado" | "farmacia" | "feria" | "minimarket" | "botilleria" | "mall" | "mall_chino" | "panaderia" | "carniceria" | "verduleria" | "otro" | null,
-  "checklist_items": string[],
-  "tags": string[],
-  "confidence": number,
-  "reason": string
-}
-
-REGLAS SEMÁNTICAS:
-
-1. FECHAS - Nunca son ítems de lista:
-   Palabras de día: lunes, martes, miércoles, jueves, viernes, sábado, domingo.
-   Palabras relativas: hoy, mañana, pasado mañana.
-   Frases: "para el jueves", "el sábado", "este viernes".
-   SIEMPRE van en date_text. JAMÁS en checklist_items.
-
-2. PREPOSICIONES - Nunca son ítems:
-   para, en, el, la, los, las, de, del, al, con, sin → JAMÁS en checklist_items.
-
-3. COMPRAS (type: shopping_list, surface: purchases):
-   Señales: comprar, compras, lista, supermercado, minimarket, feria, farmacia, negocio.
-   - Ítems reales → checklist_items (sin fechas, sin tienda, sin preposiciones, sin "comprar")
-   - Tienda → store_context
-   - Fecha → date_text
-   Ejemplos:
-   "sábado comprar pan leche bebida en minimarket" → shopping_list, date_text: "sábado", store_context: "minimarket", checklist_items: ["pan","leche","bebida"]
-   "compras farmacia cepillo de dientes pregabalina para el jueves" → shopping_list, store_context: "farmacia", date_text: "jueves", checklist_items: ["cepillo de dientes","pregabalina"]
-   "comprar en la feria papas tomate lechuga" → shopping_list, store_context: "feria", checklist_items: ["papas","tomate","lechuga"]
-
-4. PAGOS (type: payment, surface: payments):
-   Señales: pagar, pago, cancelar cuenta, luz, agua, internet, arriendo, dividendo, cuenta, mensualidad.
-   Con monto o servicio identificado → payment.
-   Ejemplo: "pagar internet 12990 hoy" → payment, amount: 12990, currency: "CLP", date_text: "hoy"
-   Ejemplo: "pago mensualidad escuela hijo 15000" → payment, amount: 15000, currency: "CLP"
-   JAMÁS uses años como amount. "buscar vuelos diciembre 2026" → amount: null.
-
-5. SALUD (type: health, surface: health):
-   Señales: médico, doctor, kine, kinesiólogo, terapia, remedio, pastilla (sin mascota), control, examen, hospital, clínica.
-   Excepción: si menciona mascota explícitamente → pet.
-   Ejemplo: "ir al médico sábado 15:00 urgente" → health, date_text: "sábado", time: "15:00", priority: "urgent"
-
-6. MASCOTAS (type: pet, surface: pets):
-   Señales: gata, gato, perro, perrita, mascota, veterinario.
-   Ejemplo: "pastilla para la gata Luna lunes 9am" → pet, date_text: "lunes", time: "09:00"
-
-7. CALENDARIO (type: calendar, surface: appointments):
-   Solo eventos generales: reunión, partido, cumpleaños, cita no médica, evento, junta, cine, compromiso, gym.
-   Si es médico → health. Si es de mascota → pet.
-   Ejemplo: "ir al gym el miércoles desde las 19:30" → calendar, surface: appointments, date_text: "miércoles", time: "19:30"
-
-8. NOTAS (type: note, surface: notes):
-   Ideas abstractas, reflexiones, planes de producto, texto largo sin acción clara.
-   Búsquedas y planes de viaje → note (amount: null aunque mencionen años).
-   Ejemplo: "buscar vuelos diciembre 2026 para luna de miel" → note, amount: null
-
-9. checklist_items SOLO contiene ítems reales. Nunca incluir:
-   - Días (lunes, sábado, etc.) ni fechas
-   - Nombre de tienda
-   - Palabras vacías: comprar, compras, lista, para, en, el, la, de, del
-
-10. AMOUNTS - Solo cuando hay contexto financiero explícito:
-    Señales válidas: $, CLP, pesos, luca, lucas, mil, pagar, pago, mensualidad, cuenta, cobrar, vale, costó.
-    NUNCA años (2025, 2026, 2027, 2028) como amount.
-
-11. CONFIDENCE:
-    - Clasificación clara: > 0.85
-    - Ambigüedad leve: 0.55–0.75
-    - Muy ambiguo: < 0.55 → type: "note", surface: "notes"
-
-Responde SOLO con JSON válido. Sin markdown. Sin explicaciones fuera del JSON.`;
+const OPENROUTER_MODEL = OPENROUTER_MODELS.primary;
+const OPENROUTER_FALLBACK_MODEL = OPENROUTER_MODELS.fallback;
 
 // ─── JSON extraction (handles markdown-wrapped responses) ─────────────────────
 
@@ -252,6 +158,15 @@ export async function POST(req: NextRequest) {
       return localFallbackResponse(text, localResult.data, 'openrouter_not_configured');
     }
 
+    // Cost budget check
+    const costCheck = trackCost(OPENROUTER_MODEL);
+    if (!costCheck.allowed) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[radar] daily cost budget exceeded', { dailyCost: costCheck.dailyCost });
+      }
+      return localFallbackResponse(text, localResult.data, 'cost_budget_exceeded');
+    }
+
     let orRes = await openRouterFetch(OPENROUTER_MODEL, text, apiKey);
 
     if (!orRes.ok) {
@@ -265,6 +180,10 @@ export async function POST(req: NextRequest) {
       }
 
       if (RETRIABLE_STATUSES.has(orRes.status) && OPENROUTER_FALLBACK_MODEL) {
+        const fallbackCostCheck = trackCost(OPENROUTER_FALLBACK_MODEL);
+        if (!fallbackCostCheck.allowed) {
+          return localFallbackResponse(text, localResult.data, 'cost_budget_exceeded');
+        }
         orRes = await openRouterFetch(OPENROUTER_FALLBACK_MODEL, text, apiKey);
         if (!orRes.ok) {
           const fallbackErrBody = await orRes.text().catch(() => '');
