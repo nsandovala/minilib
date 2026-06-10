@@ -1,5 +1,7 @@
 import { RadarCardSchema, type ContractEntryType, type ContractStoreType, type RadarCardContract } from '../contracts/card-contracts.ts';
 import { hasHealthIntent, hasPaymentIntent, hasPetAction, hasShoppingIntent, isLongFormNote } from '../agents/parser-rules.ts';
+import { inferStoreTypeFromText, mapStoreContextToType } from '../constants/store-patterns.ts';
+import { sanitizeChecklistItems } from './sanitize-checklist.ts';
 
 const TYPE_TO_SURFACE: Record<ContractEntryType, RadarCardContract['surface']> = {
   shopping_list: 'purchases',
@@ -11,40 +13,6 @@ const TYPE_TO_SURFACE: Record<ContractEntryType, RadarCardContract['surface']> =
   note: 'notes',
   task: 'todos',
 };
-
-const STORE_PATTERNS: { pattern: RegExp; type: ContractStoreType }[] = [
-  { pattern: /\bmall\s*chino\b/i, type: 'mall_chino' },
-  { pattern: /\bminimarket\b/i, type: 'minimarket' },
-  { pattern: /\b(supermercado|super)\b/i, type: 'supermercado' },
-  { pattern: /\bfarmacia\b/i, type: 'farmacia' },
-  { pattern: /\bferia\b/i, type: 'feria' },
-  { pattern: /\bbotiller[ií]a\b/i, type: 'botilleria' },
-  { pattern: /\bmall\b/i, type: 'mall' },
-  { pattern: /\bpanader[ií]a\b/i, type: 'panaderia' },
-  { pattern: /\bcarnicer[ií]a\b/i, type: 'carniceria' },
-  { pattern: /\bverduler[ií]a\b/i, type: 'verduleria' },
-];
-
-const DATE_WORDS = new Set([
-  'lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes',
-  'sábado', 'sabado', 'domingo', 'hoy', 'mañana', 'manana',
-]);
-
-const FORBIDDEN_ITEM_WORDS = new Set([
-  'lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes',
-  'sábado', 'sabado', 'domingo', 'hoy', 'mañana', 'manana',
-  'pasado', 'comprar', 'compra', 'compras', 'lista', 'total',
-  'supermercado', 'super', 'minimarket', 'farmacia', 'feria', 'mercado',
-  'botillería', 'botilleria', 'mall', 'chino', 'panadería', 'panaderia',
-  'carnicería', 'carniceria', 'verdulería', 'verduleria',
-  'para', 'por', 'en', 'el', 'la', 'los', 'las', 'de', 'del', 'al', 'con', 'sin',
-]);
-
-const COMMON_ITEMS = new Set([
-  'pan', 'leche', 'bebida', 'bebidas', 'huevos', 'arroz', 'fideos', 'aceite',
-  'azúcar', 'azucar', 'sal', 'queso', 'yogurt', 'tomate', 'tomates', 'papas',
-  'lechuga', 'cebolla', 'choclos', 'choclo', 'carne', 'pollo', 'jamón', 'jamon',
-]);
 
 function normalizeText(text: string): string {
   return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -104,62 +72,13 @@ function normalizeMoney(rawText: string, rawAmount: unknown): number | null {
 }
 
 function inferStoreType(text: string, existing: unknown): ContractStoreType {
-  for (const rule of STORE_PATTERNS) {
-    if (rule.pattern.test(text)) return rule.type;
-  }
-  if (typeof existing === 'string' && RadarCardSchema.shape.storeType.safeParse(existing).success) {
-    return existing as ContractStoreType;
+  const fromText = inferStoreTypeFromText(text);
+  if (fromText !== 'otro') return fromText;
+  if (typeof existing === 'string') {
+    const mapped = mapStoreContextToType(existing);
+    if (mapped !== 'otro') return mapped;
   }
   return 'otro';
-}
-
-function stripTotal(text: string): { text: string; possibleTotal: number | null } {
-  const match = text.match(/\btotal\s+\$?\s*(\d{1,3}(?:[.,]\d{3})+|\d{4,})\b/i);
-  const possibleTotal = parseMoneyCandidate(match?.[1]);
-  return {
-    text: match ? text.replace(match[0], ' ').replace(/\s+/g, ' ').trim() : text,
-    possibleTotal,
-  };
-}
-
-function sanitizeChecklistItems(items: unknown[], storeType: ContractStoreType, rawText: string): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const raw of items) {
-    if (typeof raw !== 'string') continue;
-    let item = stripTotal(raw).text.trim();
-    item = item.replace(/^(?:comprar|compra|compras|lista|en|para|de|del|al)\s+/i, '').trim();
-    const lower = item.toLowerCase();
-    if (!lower || lower.length < 2) continue;
-    if (FORBIDDEN_ITEM_WORDS.has(lower) || lower === storeType) continue;
-    if (/^total\b/i.test(lower) || /\btotal\s+\d/i.test(lower)) continue;
-    if (DATE_WORDS.has(lower)) continue;
-    if (seen.has(lower)) continue;
-    seen.add(lower);
-    result.push(item);
-    if (result.length >= 30) break;
-  }
-
-  if (result.length > 0) return result;
-
-  const withoutTotal = stripTotal(rawText).text
-    .replace(/\b(?:hoy|mañana|manana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/gi, ' ')
-    .replace(/\b(?:comprar|compra|compras|lista|en|el|la|los|las|de|del|al|para|por|supermercado|super|minimarket|farmacia|feria|mercado|botiller[ií]a|mall\s*chino|mall|panader[ií]a|carnicer[ií]a|verduler[ií]a)\b/gi, ' ')
-    .replace(/\b\d{1,2}:\d{2}\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return withoutTotal
-    .split(/\s+y\s+|[,;/]|\s+/i)
-    .map((item) => item.trim())
-    .filter((item) => item.length > 1 && !FORBIDDEN_ITEM_WORDS.has(item.toLowerCase()))
-    .filter((item) => COMMON_ITEMS.has(item.toLowerCase()))
-    .filter((item) => {
-      const lower = item.toLowerCase();
-      if (seen.has(lower)) return false;
-      seen.add(lower);
-      return true;
-    });
 }
 
 function inferType(text: string, candidateType: unknown, items: string[]): ContractEntryType {
@@ -185,13 +104,14 @@ export function normalizeRadarResult(raw: unknown, rawText: string): {
   const candidate = raw && typeof raw === 'object' && !Array.isArray(raw)
     ? { ...(raw as Record<string, unknown>) }
     : {};
-  const total = stripTotal(rawText).possibleTotal;
   const storeType = inferStoreType(rawText, candidate.storeType ?? candidate.store_context);
-  const items = sanitizeChecklistItems(
+  const checklistResult = sanitizeChecklistItems(
     Array.isArray(candidate.checklist_items) ? candidate.checklist_items : [],
     storeType,
     rawText,
   );
+  const items = checklistResult.items;
+  const possibleTotal = checklistResult.possibleTotal;
   const type = inferType(rawText, candidate.type, items);
   const amount = type === 'payment' ? normalizeMoney(rawText, candidate.amount) : null;
 
@@ -219,7 +139,7 @@ export function normalizeRadarResult(raw: unknown, rawText: string): {
     reason: typeof candidate.reason === 'string' ? candidate.reason : 'normalized-contract',
     metadata: {
       ...(candidate.metadata && typeof candidate.metadata === 'object' && !Array.isArray(candidate.metadata) ? candidate.metadata : {}),
-      possibleTotal: total,
+      possibleTotal: possibleTotal,
       shoppingCompletion: {
         totalCompra: null,
         linkedEntryId: null,
@@ -346,8 +266,8 @@ export function shouldUseAI(text: string, localResult: RadarCardContract): boole
   // Texto largo con note pero con posible intención oculta
   if (localResult.type === 'note' && text.length > 80 && /\b(para|necesito|tengo que|debo|hay que)\b/i.test(text)) return true;
 
-  // checklist vacío cuando parece lista
-  if (/\b(comprar|lista|super|mercado|feria|farmacia)\b/i.test(text) && localResult.checklist_items.length === 0) return true;
+  // Texto con señales de lista pero sin items extraídos → IA puede ayudar
+  if (hasShoppingIntent(text) && localResult.checklist_items.length === 0) return true;
 
   return false;
 }

@@ -273,6 +273,19 @@ export async function reparseAndUpdateEntry(id: number, newText: string): Promis
   const existing = await db.entries.get(id);
   if (!existing) return;
 
+  // Guard: if the user manually reclassified this entry, do NOT re-parse type.
+  // Only update text and title; preserve all other fields including metadata.
+  const existingMetadata = (existing.metadata ?? {}) as Record<string, unknown>;
+  if (existingMetadata.manualType === true) {
+    await db.entries.update(id, {
+      text: newText.trim(),
+      title: newText.trim().slice(0, 100),
+      updatedAt: new Date(),
+      syncedAt: null,
+    });
+    return;
+  }
+
   const result = processInput(newText.trim());
   if (!result.success || !result.entry) return;
 

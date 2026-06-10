@@ -1,5 +1,6 @@
 import { parseTokens } from '@/core/agents/parser-agent';
 import { normalizeRadarResult } from '@/core/cognitive/normalize-radar-result';
+import { mapStoreContextToType } from '@/core/constants/store-patterns';
 import type { EntryType, ParsedEntry, ShoppingMetadata, StoreType } from '@/types';
 
 // ─── Allowed values ───────────────────────────────────────────────────────────
@@ -44,21 +45,7 @@ const TYPE_MAP: Record<string, EntryType> = {
   home: 'task',
 };
 
-function mapStoreType(ctx: string | null): StoreType {
-  if (!ctx) return 'otro';
-  const lower = ctx.toLowerCase();
-  if (lower.includes('mall_chino') || /mall\s*chino/.test(lower)) return 'mall_chino';
-  if (lower.includes('minimarket')) return 'minimarket';
-  if (lower.includes('botilleria') || lower.includes('botillería')) return 'botilleria';
-  if (lower.includes('panaderia') || lower.includes('panadería')) return 'panaderia';
-  if (lower.includes('carniceria') || lower.includes('carnicería')) return 'carniceria';
-  if (lower.includes('verduleria') || lower.includes('verdulería')) return 'verduleria';
-  if (lower.includes('farmacia')) return 'farmacia';
-  if (lower.includes('super')) return 'supermercado';
-  if (lower.includes('feria') || lower.includes('mercado')) return 'feria';
-  if (lower.includes('mall')) return 'mall';
-  return 'otro';
-}
+// mapStoreType is now provided by @/core/constants/store-patterns (mapStoreContextToType)
 
 // ─── Entry builder ────────────────────────────────────────────────────────────
 
@@ -76,7 +63,7 @@ export function radarToEntry(radar: RadarResult, rawText: string): ParsedEntry {
   if (type === 'shopping_list' && radar.checklist_items.length > 0) {
     const shoppingMeta: ShoppingMetadata = {
       listKind: 'shopping',
-      storeType: radar.storeType ?? mapStoreType(radar.store_context),
+      storeType: radar.storeType ?? mapStoreContextToType(radar.store_context),
       items: radar.checklist_items.map((label) => ({
         id: crypto.randomUUID(),
         label,

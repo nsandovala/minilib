@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildHeuristicRadarResult, normalizeRadarResult, shouldUseAI } from '../src/core/cognitive/normalize-radar-result.ts';
+import { sanitizeChecklistItems as sanitizeChecklistItemsCore } from '../src/core/cognitive/sanitize-checklist.ts';
 
 // ─── Inline mirrors of src/lib/radar.ts pure logic ───────────────────────────
 // (Cannot import TypeScript files that use @/ aliases directly in Node test runner)
@@ -35,25 +36,9 @@ function clampConfidence(v) {
 }
 
 function sanitizeChecklistItems(items, storeContext) {
-  const storeWords = storeContext
-    ? new Set(storeContext.toLowerCase().split(/\s+/).filter(Boolean))
-    : new Set();
-  const seen = new Set();
-  const result = [];
-  for (const raw of items) {
-    if (typeof raw !== 'string') continue;
-    const trimmed = raw.trim();
-    if (!trimmed || trimmed.length < 2) continue;
-    const lower = trimmed.toLowerCase();
-    if (FORBIDDEN_ITEM_WORDS.has(lower)) continue;
-    const words = lower.split(/\s+/);
-    if (storeWords.size > 0 && words.every(w => storeWords.has(w))) continue;
-    if (seen.has(lower)) continue;
-    seen.add(lower);
-    result.push(trimmed);
-    if (result.length >= 30) break;
-  }
-  return result;
+  // Delegate to the core sanitizer (single source of truth)
+  const result = sanitizeChecklistItemsCore(items, storeContext ?? 'otro', '');
+  return result.items;
 }
 
 function isValidRadarType(v) { return typeof v === 'string' && VALID_RADAR_TYPES.has(v); }
