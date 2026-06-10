@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import type { ParsedEntry, TimelineEntry, ShoppingMetadata } from '@/types';
+import type { ParsedEntry, TimelineEntry, ShoppingMetadata, EntryType } from '@/types';
 import { createChecklistItems, softDeleteChecklistItemsForEntry } from '@/db/checklist';
 import { processInput } from '@/core/agents/orchestrator';
 import { buildEntryFingerprint } from '@/lib/sync/dedupe';
@@ -222,6 +222,74 @@ export async function updateEntry(
   >
 ): Promise<void> {
   await db.entries.update(id, { ...data, updatedAt: new Date(), syncedAt: null });
+}
+
+/* ─── Manual reclassification with feedback tracking ─────────────────────── */
+
+export async function reclassifyEntry(
+  id: number,
+  changes: {
+    type?: EntryType;
+    amount?: number | null;
+    date?: string | null;
+    time?: string | null;
+  }
+): Promise<void> {
+  const entry = await db.entries.get(id);
+  if (!entry) return;
+
+  const currentMeta = (entry.metadata ?? {}) as Record<string, unknown>;
+  const corrections = Array.isArray(currentMeta.userCorrections)
+    ? [...currentMeta.userCorrections]
+    : [];
+
+  const now = new Date().toISOString();
+
+  if (changes.type && changes.type !== entry.type) {
+    corrections.push({
+      field: 'type',
+      from: entry.type,
+      to: changes.type,
+      at: now,
+    });
+  }
+
+  if (changes.amount !== undefined && changes.amount !== entry.amount) {
+    corrections.push({
+      field: 'amount',
+      from: entry.amount ?? null,
+      to: changes.amount,
+      at: now,
+    });
+  }
+
+  if (changes.date !== undefined && changes.date !== entry.date) {
+    corrections.push({
+      field: 'date',
+      from: entry.date ?? null,
+      to: changes.date,
+      at: now,
+    });
+  }
+
+  const metadata = {
+    ...currentMeta,
+    manualType: true,
+    userCorrections: corrections,
+  };
+
+  const updateData: Partial<TimelineEntry> = {
+    metadata,
+    updatedAt: new Date(),
+    syncedAt: null,
+  };
+
+  if (changes.type) updateData.type = changes.type;
+  if (changes.amount !== undefined) updateData.amount = changes.amount;
+  if (changes.date !== undefined) updateData.date = changes.date;
+  if (changes.time !== undefined) updateData.time = changes.time;
+
+  await db.entries.update(id, updateData);
 }
 
 export async function deleteEntry(id: number): Promise<void> {

@@ -472,6 +472,7 @@ export default function TimelineView({ entries, onRefresh, currentSurface }: Tim
             onRefresh();
           }}
           onClose={() => setReadingNote(null)}
+          onRefresh={onRefresh}
         />
       )}
 
