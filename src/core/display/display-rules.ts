@@ -100,7 +100,7 @@ function hasLowConfidence(entry: TimelineEntry): boolean {
   const entryConfidence = getMetadataNumber(entry, 'confidence');
   const parserConfidence = getMetadataNumber(entry, 'parserConfidence');
   const confidence = entryConfidence ?? parserConfidence;
-  return confidence !== null && confidence < 0.8;
+  return confidence !== null && confidence < 0.5;
 }
 
 function wasAutoCorrected(entry: TimelineEntry): boolean {
@@ -123,18 +123,12 @@ export function shouldShowCalmExplanation(entry: TimelineEntry, context: Display
 
   const lowConfidence = hasLowConfidence(entry);
   const autoCorrected = wasAutoCorrected(entry);
-  const outsidePrimary = isOutsidePrimarySurface(context);
-  const specific = !isGenericExplanation(context.calmExplanation);
 
-  // Generic explanations ("Guardé esto como nota…", etc.) only show when
-  // the classifier explicitly flagged low confidence or corrected the type.
-  // Ambiguity alone is not enough — correction hints handle that case instead.
-  if (!specific) {
-    return lowConfidence || autoCorrected;
-  }
-
-  // Specific (non-generic) explanations show for any contextual reason.
-  return lowConfidence || autoCorrected || outsidePrimary || isAmbiguousEntry(entry);
+  // Only show explanations when the classifier explicitly flagged low confidence
+  // or corrected the type. Ambiguity alone is not enough — correction hints
+  // handle that case instead. This prevents the app from "justifying" itself
+  // constantly and preserves visual calm.
+  return lowConfidence || autoCorrected;
 }
 
 function isStronglyLikelyPayment(entry: TimelineEntry): boolean {

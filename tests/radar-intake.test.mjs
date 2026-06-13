@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { buildHeuristicRadarResult, normalizeRadarResult, shouldUseAI } from '../src/core/cognitive/normalize-radar-result.ts';
+import { sanitizeChecklistItems as sanitizeChecklistItemsCore } from '../src/core/cognitive/sanitize-checklist.ts';
 
 // ─── Inline mirrors of src/lib/radar.ts pure logic ───────────────────────────
 // (Cannot import TypeScript files that use @/ aliases directly in Node test runner)
@@ -34,25 +36,9 @@ function clampConfidence(v) {
 }
 
 function sanitizeChecklistItems(items, storeContext) {
-  const storeWords = storeContext
-    ? new Set(storeContext.toLowerCase().split(/\s+/).filter(Boolean))
-    : new Set();
-  const seen = new Set();
-  const result = [];
-  for (const raw of items) {
-    if (typeof raw !== 'string') continue;
-    const trimmed = raw.trim();
-    if (!trimmed || trimmed.length < 2) continue;
-    const lower = trimmed.toLowerCase();
-    if (FORBIDDEN_ITEM_WORDS.has(lower)) continue;
-    const words = lower.split(/\s+/);
-    if (storeWords.size > 0 && words.every(w => storeWords.has(w))) continue;
-    if (seen.has(lower)) continue;
-    seen.add(lower);
-    result.push(trimmed);
-    if (result.length >= 30) break;
-  }
-  return result;
+  // Delegate to the core sanitizer (single source of truth)
+  const result = sanitizeChecklistItemsCore(items, storeContext ?? 'otro', '');
+  return result.items;
 }
 
 function isValidRadarType(v) { return typeof v === 'string' && VALID_RADAR_TYPES.has(v); }
@@ -247,6 +233,76 @@ test('type mapping: home → task', () => {
 
 test('type mapping: tipo desconocido → fallback note', () => {
   assert.equal(TYPE_MAP['xyz'] ?? 'note', 'note');
+});
+
+// ─── Contratos Zod centrales: casos críticos pre-producción ──────────────────
+
+test('[zod-1] pago google one 21000 → payment con monto y tags', () => {
+  const result = buildHeuristicRadarResult('pago google one 21000');
+  assert.equal(result.type, 'payment');
+  assert.equal(result.amount, 21000);
+  assert.ok(result.tags.includes('payment'));
+  assert.ok(result.tags.includes('expense'));
+});
+
+test('[zod-2] buscar vuelos diciembre 2026 → no interpreta año como monto', () => {
+  const result = buildHeuristicRadarResult('buscar vuelos para diciembre 2026 para luna de miel');
+  assert.ok(result.type === 'task' || result.type === 'note');
+  assert.equal(result.amount, null);
+  assert.notEqual(result.type, 'payment');
+});
+
+test('[zod-3] sábado comprar pan leche bebida → shopping_list con sábado preservado', () => {
+  const result = buildHeuristicRadarResult('sábado comprar pan leche bebida');
+  assert.equal(result.type, 'shopping_list');
+  assert.deepEqual(result.checklist_items, ['pan', 'leche', 'bebida']);
+  assert.equal(result.date_text, 'sábado');
+  assert.equal(result.dateISO, null);
+  assert.equal(result.amount, null);
+});
+
+test('[zod-4] comprar pan leche bebida en minimarket → storeType minimarket', () => {
+  const result = buildHeuristicRadarResult('comprar pan leche bebida en minimarket');
+  assert.equal(result.type, 'shopping_list');
+  assert.equal(result.storeType, 'minimarket');
+  assert.deepEqual(result.checklist_items, ['pan', 'leche', 'bebida']);
+});
+
+test('[zod-5] médico miércoles a las 15:30 → cita/salud sin monto', () => {
+  const result = buildHeuristicRadarResult('médico miércoles a las 15:30');
+  assert.ok(result.type === 'appointment' || result.type === 'health');
+  assert.equal(result.time, '15:30');
+  assert.equal(result.amount, null);
+  assert.notEqual(result.type, 'payment');
+});
+
+test('[zod-6] hora veterinaria para saly sábado 15:30 → pet o appointment con tag pet', () => {
+  const result = buildHeuristicRadarResult('hora veterinaria para saly sábado 15:30');
+  assert.ok(result.type === 'pet' || result.type === 'appointment');
+  if (result.type === 'appointment') assert.ok(result.tags.includes('pet'));
+  assert.equal(result.time, '15:30');
+  assert.equal(result.amount, null);
+});
+
+test('[zod-7] pago mensualidad escuela hijo 15.000 → payment 15000', () => {
+  const result = buildHeuristicRadarResult('pago mensualidad escuela hijo 15.000');
+  assert.equal(result.type, 'payment');
+  assert.equal(result.amount, 15000);
+});
+
+test('[zod-8] total de compra no contamina items', () => {
+  const result = normalizeRadarResult({
+    type: 'shopping_list',
+    surface: 'purchases',
+    title: 'Compra',
+    checklist_items: ['choclos total 7330'],
+    amount: 7330,
+  }, 'choclos total 7330');
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.data?.checklist_items, ['choclos']);
+  assert.equal(result.data?.amount, null);
+  assert.equal(result.data?.metadata.possibleTotal, 7330);
 });
 
 // ─── Casos de uso completos (mock de respuesta IA) ───────────────────────────
@@ -539,4 +595,285 @@ test('D: gym el miércoles → surface appointments, amount null, time preservad
   assert.equal(normalized.time, '19:30');
   assert.equal(normalized.amount, null);
   assert.equal(normalized.surface, 'appointments', 'surface "calendar" debe corregirse a "appointments"');
+});
+
+// ─── Local-first: shouldUseAI ─────────────────────────────────────────────────
+
+test('shouldUseAI: shopping_list con 3 items y minimarket → NO IA', () => {
+  const result = buildHeuristicRadarResult('sábado comprar pan leche bebida en minimarket');
+  assert.equal(result.type, 'shopping_list');
+  assert.ok(result.confidence >= 0.82, `confidence ${result.confidence} debe ser >= 0.82`);
+  assert.equal(shouldUseAI('sábado comprar pan leche bebida en minimarket', result), false);
+});
+
+test('shouldUseAI: payment con amount y palabra pago → NO IA', () => {
+  const result = buildHeuristicRadarResult('pago google one 21000');
+  assert.equal(result.type, 'payment');
+  assert.equal(result.amount, 21000);
+  assert.ok(result.confidence >= 0.82, `confidence ${result.confidence} debe ser >= 0.82`);
+  assert.equal(shouldUseAI('pago google one 21000', result), false);
+});
+
+test('shouldUseAI: appointment con date_text y time → NO IA', () => {
+  const result = buildHeuristicRadarResult('médico miércoles a las 15:30');
+  assert.ok(result.type === 'appointment' || result.type === 'health');
+  assert.equal(result.time, '15:30');
+  assert.ok(result.confidence >= 0.82, `confidence ${result.confidence} debe ser >= 0.82`);
+  assert.equal(shouldUseAI('médico miércoles a las 15:30', result), false);
+});
+
+test('shouldUseAI: pet claro → NO IA', () => {
+  const result = buildHeuristicRadarResult('pastilla para la gata Luna lunes 9am');
+  assert.equal(result.type, 'pet');
+  assert.ok(result.confidence >= 0.82, `confidence ${result.confidence} debe ser >= 0.82`);
+  assert.equal(shouldUseAI('pastilla para la gata Luna lunes 9am', result), false);
+});
+
+test('shouldUseAI: note simple → NO IA', () => {
+  const result = buildHeuristicRadarResult('recordar llamar a mamá');
+  assert.equal(result.type, 'note');
+  assert.ok(result.confidence >= 0.80, `confidence ${result.confidence} debe ser >= 0.80`);
+  assert.equal(shouldUseAI('recordar llamar a mamá', result), false);
+});
+
+test('shouldUseAI: note con señales mixtas → SÍ IA', () => {
+  const result = buildHeuristicRadarResult('buscar vuelos diciembre 2026 para luna de miel');
+  assert.ok(result.type === 'task' || result.type === 'note');
+  assert.ok(shouldUseAI('buscar vuelos diciembre 2026 para luna de miel', result), 'debe usar IA por intención mixta con año');
+});
+
+test('shouldUseAI: shopping_list sin items → SÍ IA', () => {
+  const result = buildHeuristicRadarResult('ir al super');
+  assert.ok(result.type === 'note' || result.type === 'task' || result.type === 'shopping_list');
+  assert.ok(shouldUseAI('ir al super', result), 'debe usar IA porque no hay items claros');
+});
+
+test('shouldUseAI: payment sin monto → SÍ IA', () => {
+  const result = buildHeuristicRadarResult('pagar la cuenta del agua');
+  // Sin monto explícito, la heurística lo clasifica como note con señal de pago
+  assert.ok(result.type === 'note' || result.type === 'payment');
+  assert.equal(result.amount, null);
+  assert.ok(shouldUseAI('pagar la cuenta del agua', result), 'debe usar IA porque no hay monto');
+});
+
+test('shouldUseAI: texto largo conceptual → SÍ IA', () => {
+  const text = 'Implementar integración con Google Calendar usando OAuth 2.0 y webhooks para sincronizar eventos automáticamente cada 15 minutos';
+  const result = buildHeuristicRadarResult(text);
+  assert.ok(shouldUseAI(text, result), 'debe usar IA porque es texto largo conceptual');
+});
+
+// ─── Casos específicos del prompt ─────────────────────────────────────────────
+
+test('caso específico: sábado comprar pan leche bebida en minimarket → shopping_list completa', () => {
+  const result = buildHeuristicRadarResult('sábado comprar pan leche bebida en minimarket');
+  assert.equal(result.type, 'shopping_list');
+  assert.equal(result.storeType, 'minimarket');
+  assert.deepEqual(result.checklist_items, ['pan', 'leche', 'bebida']);
+  assert.equal(result.date_text, 'sábado');
+  assert.equal(result.amount, null);
+  assert.ok(result.confidence >= 0.82);
+});
+
+test('caso específico: buscar vuelos para diciembre 2026 para luna de miel → NO amount', () => {
+  const result = buildHeuristicRadarResult('buscar vuelos para diciembre 2026 para luna de miel');
+  assert.equal(result.amount, null);
+  assert.notEqual(result.type, 'payment');
+});
+
+test('caso específico: pago google one 21000 → payment 21000', () => {
+  const result = buildHeuristicRadarResult('pago google one 21000');
+  assert.equal(result.type, 'payment');
+  assert.equal(result.amount, 21000);
+  assert.ok(result.confidence >= 0.82);
+});
+
+test('caso específico: médico miércoles a las 15:30 → appointment/calendar con time', () => {
+  const result = buildHeuristicRadarResult('médico miércoles a las 15:30');
+  assert.ok(result.type === 'appointment' || result.type === 'health');
+  assert.equal(result.date_text, 'miércoles');
+  assert.equal(result.time, '15:30');
+  assert.equal(result.amount, null);
+  assert.ok(result.confidence >= 0.82);
+});
+
+// ─── Casos mínimos obligatorios (radar heurístico) ───────────────────────────
+
+test('mínimo-1: comprar pan leche bebida → shopping_list', () => {
+  const result = buildHeuristicRadarResult('comprar pan leche bebida');
+  assert.equal(result.type, 'shopping_list');
+  assert.deepEqual(result.checklist_items, ['pan', 'leche', 'bebida']);
+  assert.equal(result.amount, null);
+  assert.ok(result.confidence >= 0.82);
+});
+
+test('mínimo-2: sábado comprar pan leche bebida en minimarket → shopping_list con fecha y store', () => {
+  const result = buildHeuristicRadarResult('sábado comprar pan leche bebida en minimarket');
+  assert.equal(result.type, 'shopping_list');
+  assert.equal(result.date_text, 'sábado');
+  assert.equal(result.storeType, 'minimarket');
+  assert.deepEqual(result.checklist_items, ['pan', 'leche', 'bebida']);
+  assert.equal(result.amount, null);
+  assert.ok(result.confidence >= 0.82);
+});
+
+test('mínimo-3: pagar wom 32000 → payment con amount', () => {
+  const result = buildHeuristicRadarResult('pagar wom 32000');
+  assert.equal(result.type, 'payment');
+  assert.equal(result.amount, 32000);
+  assert.ok(result.title.toLowerCase().includes('wom'));
+  assert.ok(result.confidence >= 0.82);
+});
+
+test('mínimo-4: ir al médico mañana a las 15:00 → appointment/calendar con fecha y hora', () => {
+  const result = buildHeuristicRadarResult('ir al médico mañana a las 15:00');
+  assert.ok(result.type === 'appointment' || result.type === 'health');
+  assert.equal(result.date_text, 'mañana');
+  assert.equal(result.time, '15:00');
+  assert.equal(result.amount, null);
+  assert.ok(result.confidence >= 0.82);
+});
+
+test('mínimo-5: ideas para conectar Gmail Notion GitHub con Liev → note', () => {
+  const result = buildHeuristicRadarResult('ideas para conectar Gmail Notion GitHub con Liev');
+  assert.equal(result.type, 'note');
+  assert.equal(result.checklist_items.length, 0);
+  assert.equal(result.amount, null);
+  assert.notEqual(result.type, 'shopping_list');
+  assert.notEqual(result.type, 'payment');
+});
+
+// ─── Fallback local: parser-agent + normalizer-agent ─────────────────────────
+
+import { parseTokens } from '../src/core/agents/parser-agent.ts';
+import { normalizeEntry } from '../src/core/agents/normalizer-agent.ts';
+
+const LOCAL_PARSE_BASE_DATE = new Date('2026-06-12T12:00:00-04:00');
+
+function localParse(text, baseDate = LOCAL_PARSE_BASE_DATE) {
+  const tokens = parseTokens(text, { baseDate });
+  return normalizeEntry(tokens);
+}
+
+test('local-1: comprar pan leche bebida → shopping_list', () => {
+  const entry = localParse('comprar pan leche bebida');
+  assert.equal(entry.type, 'shopping_list');
+  assert.deepEqual(entry.checklistItems, ['pan', 'leche', 'bebida']);
+  assert.ok(entry.metadata && entry.metadata.listKind === 'shopping');
+});
+
+test('local-2: sábado comprar pan leche bebida en minimarket → shopping_list con fecha y store', () => {
+  const entry = localParse('sábado comprar pan leche bebida en minimarket');
+  assert.equal(entry.type, 'shopping_list');
+  assert.equal(entry.date, '2026-06-13'); // next saturday
+  assert.ok(entry.metadata && entry.metadata.listKind === 'shopping');
+  assert.equal(entry.metadata.storeType, 'minimarket');
+  assert.deepEqual(entry.checklistItems, ['pan', 'leche', 'bebida']);
+});
+
+test('local-3: pagar wom 32000 → payment con amount', () => {
+  const entry = localParse('pagar wom 32000');
+  assert.equal(entry.type, 'payment');
+  assert.equal(entry.amount, 32000);
+  assert.ok(entry.title.toLowerCase().includes('wom'));
+});
+
+test('local-4: ir al médico mañana a las 15:00 → appointment/calendar con fecha y hora', () => {
+  const entry = localParse('ir al médico mañana a las 15:00');
+  assert.ok(entry.type === 'appointment' || entry.type === 'health');
+  assert.equal(entry.date, '2026-06-13'); // tomorrow
+  assert.equal(entry.time, '15:00');
+  assert.equal(entry.amount, undefined);
+});
+
+test('shopping-date-cleanup-1: fecha día mes no entra como item de compra', () => {
+  const text = '21 junio comprar pan, lechuga, bebidas';
+  const radar = buildHeuristicRadarResult(text);
+  assert.equal(radar.type, 'shopping_list');
+  assert.equal(radar.date_text, '21 junio');
+  assert.deepEqual(radar.checklist_items, ['pan', 'lechuga', 'bebidas']);
+  assert.ok(!radar.checklist_items.includes('21'));
+  assert.ok(!radar.checklist_items.includes('junio'));
+
+  const entry = localParse(text);
+  assert.equal(entry.type, 'shopping_list');
+  assert.equal(entry.date, '2026-06-21');
+  assert.deepEqual(entry.checklistItems, ['pan', 'lechuga', 'bebidas']);
+});
+
+test('shopping-date-cleanup-2: weekday no pisa fecha explícita ni se pega al primer item', () => {
+  const text = 'domingo 21 de junio comprar pan, lechuga';
+  const radar = buildHeuristicRadarResult(text);
+  assert.equal(radar.type, 'shopping_list');
+  assert.equal(radar.date_text, '21 de junio');
+  assert.deepEqual(radar.checklist_items, ['pan', 'lechuga']);
+  assert.ok(!radar.checklist_items.includes('domingo'));
+  assert.ok(!radar.checklist_items.includes('21'));
+  assert.ok(!radar.checklist_items.includes('junio'));
+
+  const entry = localParse(text);
+  assert.equal(entry.type, 'shopping_list');
+  assert.equal(entry.date, '2026-06-21');
+  assert.deepEqual(entry.checklistItems, ['pan', 'lechuga']);
+});
+
+test('shopping-date-cleanup-3: mañana no entra como item', () => {
+  const text = 'mañana comprar pan';
+  const radar = buildHeuristicRadarResult(text);
+  assert.ok(radar.type === 'task' || radar.type === 'shopping_list');
+  assert.equal(radar.date_text, 'mañana');
+  assert.ok(!radar.checklist_items.includes('mañana'));
+  assert.ok(!radar.checklist_items.includes('manana'));
+
+  const entry = localParse(text);
+  assert.ok(entry.type === 'task' || entry.type === 'shopping_list');
+  assert.equal(entry.date, '2026-06-13');
+  assert.ok(!entry.checklistItems?.includes('mañana'));
+  assert.ok(!entry.checklistItems?.includes('manana'));
+});
+
+test('shopping-date-cleanup-4: lista simple de compras sigue igual', () => {
+  const text = 'comprar pan leche bebida';
+  const radar = buildHeuristicRadarResult(text);
+  assert.equal(radar.type, 'shopping_list');
+  assert.deepEqual(radar.checklist_items, ['pan', 'leche', 'bebida']);
+
+  const entry = localParse(text);
+  assert.equal(entry.type, 'shopping_list');
+  assert.deepEqual(entry.checklistItems, ['pan', 'leche', 'bebida']);
+});
+
+test('local-date-1: fecha explícita día mes año tiene prioridad sobre relativos', () => {
+  const entry = localParse('21 de junio 2026, estreno la casa del dragón');
+  assert.equal(entry.date, '2026-06-21');
+});
+
+test('local-date-2: día de semana no pisa fecha explícita completa', () => {
+  const entry = localParse('domingo 21 de junio 2026 estreno la casa del dragón');
+  assert.equal(entry.date, '2026-06-21');
+});
+
+test('local-date-3: mañana sigue resolviendo contra fecha base fija', () => {
+  const entry = localParse('mañana llevar alimentos');
+  assert.equal(entry.date, '2026-06-13');
+});
+
+test('local-date-4: día de semana sigue resolviendo contra fecha base fija', () => {
+  const entry = localParse('domingo llevar alimentos');
+  assert.equal(entry.date, '2026-06-14');
+});
+
+test('local-5: ideas para conectar Gmail Notion GitHub con Liev → note', () => {
+  const entry = localParse('ideas para conectar Gmail Notion GitHub con Liev');
+  assert.equal(entry.type, 'note');
+  assert.equal(entry.checklistItems, undefined);
+  assert.equal(entry.amount, undefined);
+  assert.notEqual(entry.type, 'shopping_list');
+  assert.notEqual(entry.type, 'payment');
+});
+
+test('local-6: nota larga con keywords mixtos → note, no shopping_list', () => {
+  const entry = localParse('Implementar integración con Google Calendar usando OAuth 2.0 y webhooks para sincronizar eventos automáticamente cada 15 minutos');
+  assert.equal(entry.type, 'note');
+  assert.equal(entry.checklistItems, undefined);
+  assert.notEqual(entry.type, 'shopping_list');
 });

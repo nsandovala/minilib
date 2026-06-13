@@ -103,21 +103,6 @@ Reiniciar servidor de desarrollo (el valor se embebe en el bundle al inicio).
 
 ## Bitácora de cambios
 
-### 2026-06-03 — RADAR intake — Zod validation + defensive normalization
-
-**Qué se tocó:**
-- `src/app/api/radar/intake/route.ts`: eliminado `validateAndSanitize` manual. Agregado `RadarSchema` (Zod). Agregado `normalizeRadarCandidate(raw, rawText)` con 6 guardias: (1) coerción de amount string chileno "15.000" → 15000, (2) año-como-dinero (1900–2100 sin contexto financiero → null), (3) surface forzado desde type, (4) store_context inferido del rawText, (5) filtrado de checklist_items (fechas/tiendas/conectores), (6) title fallback. Prompt actualizado: REGLAS CRÍTICAS explícitas, surface `calendar` → `appointments`, ejemplos mejorados, regla de años. Zod con `.catch()` leniente para campos opcionales.
-- `src/lib/radar.ts`: `appointments` agregado a `VALID_SURFACES` (necesario para que `isValidSurface` acepte la nueva surface de calendar).
-- `tests/radar-intake.test.mjs`: `VALID_SURFACES` actualizado. 5 tests nuevos (A, B, C×2, D) para normalización defensiva. Total: 193 passing.
-
-**Qué NO se tocó:** sync, UI, theme, parser heurístico, Dexie, DB schema, migraciones, package.json.
-
-**Validaciones:** typecheck OK, 193/193 tests, build OK.
-
-**Riesgos pendientes:**
-- La duplicidad de cards (mismo texto enviado varias veces) NO queda resuelta por Zod ni por la normalización. Próximo bloque recomendado: idempotencia client-side (isSubmitting guard) + dedupeKey semántico en Dexie para evitar entradas duplicadas locales.
-- `normalizeRadarCandidate` infiere `store_context` desde `rawText` con regex. Si el texto contiene "super" (no como tienda) puede inferir "supermercado" incorrectamente. Mitigación: `\bsuper\b` limita a palabra completa.
-
 ### 2026-06-03 — RADAR OpenRouter fallback model + retry
 
 **Problema:** `moonshotai/kimi-k2.6:free` devolvía 429 (rate-limit upstream), causando fallback abrupto sin retry.
@@ -950,3 +935,79 @@ más botonesmás dashboardsmás promesasmás mocksmás capas rotas
 Frase final de producto:
 
 Liev es una libreta tranquila con memoria contextual: captura lo cotidiano, lo ordena sin ruido y abre el camino hacia bienestar, finanzas y contexto visual cuando el usuario realmente lo necesita.
+
+## Fase futura — Shopping Receipt Flow
+
+Objetivo:
+Permitir que una lista de compras pueda adjuntar una boleta/foto, extraer texto mediante OCR, transformar el contenido en JSON validado y opcionalmente generar un PDF exportable.
+
+Flujo deseado:
+1. Usuario completa una shopping_list.
+2. Usuario presiona “Adjuntar boleta”.
+3. Usuario toma foto o sube imagen.
+4. Sistema ejecuta OCR.
+5. Sistema genera ReceiptData JSON.
+6. Zod valida estructura.
+7. Usuario confirma/corrige total, comercio e items.
+8. Sistema guarda metadata en DB.
+9. Sistema vincula receipt con linkedEntryId.
+10. Sistema puede crear egreso en payments si no existe uno previo.
+11. Sistema puede generar PDF descargable con resumen de compra.
+
+Reglas:
+- No guardar imágenes pesadas directamente en DB.
+- Guardar solo imageRef/pdfRef + rawText + JSON validado.
+- No confiar directamente en OCR.
+- No descontar saldo sin confirmación del usuario.
+- No duplicar egreso si ya existe linkedEntryId.
+- Mantener flujo local-first.
+- Google Drive será preferido para boletas/PDF.
+- Google Photos queda reservado para memoria visual personal/contextual.
+
+Tipo sugerido:
+ReceiptData
+
+Pendiente:
+- Evaluar tesseract.js para OCR local.
+- Evaluar pdf-lib o jspdf para generación de PDF.
+- Diseñar UI mínima de “Adjuntar boleta”.
+- Definir storage strategy.
+- Conectar con payments.
+
+## Fase futura — Shopping Receipt Flow
+
+Objetivo:
+Permitir que una lista de compras pueda adjuntar una boleta/foto, extraer texto mediante OCR, transformar el contenido en JSON validado y opcionalmente generar un PDF exportable.
+
+Flujo deseado:
+1. Usuario completa una shopping_list.
+2. Usuario presiona “Adjuntar boleta”.
+3. Usuario toma foto o sube imagen.
+4. Sistema ejecuta OCR.
+5. Sistema genera ReceiptData JSON.
+6. Zod valida estructura.
+7. Usuario confirma/corrige total, comercio e items.
+8. Sistema guarda metadata en DB.
+9. Sistema vincula receipt con linkedEntryId.
+10. Sistema puede crear egreso en payments si no existe uno previo.
+11. Sistema puede generar PDF descargable con resumen de compra.
+
+Reglas:
+- No guardar imágenes pesadas directamente en DB.
+- Guardar solo imageRef/pdfRef + rawText + JSON validado.
+- No confiar directamente en OCR.
+- No descontar saldo sin confirmación del usuario.
+- No duplicar egreso si ya existe linkedEntryId.
+- Mantener flujo local-first.
+- Google Drive será preferido para boletas/PDF.
+- Google Photos queda reservado para memoria visual personal/contextual.
+
+Tipo sugerido:
+ReceiptData
+
+Pendiente:
+- Evaluar tesseract.js para OCR local.
+- Evaluar pdf-lib o jspdf para generación de PDF.
+- Diseñar UI mínima de “Adjuntar boleta”.
+- Definir storage strategy.
+- Conectar con payments.

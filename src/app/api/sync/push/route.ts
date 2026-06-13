@@ -277,9 +277,30 @@ export async function POST(req: Request): Promise<Response> {
         : {}),
     });
   } catch (err) {
+    const e = err as Record<string, unknown>;
+    const rawMessage = String(e?.message ?? '');
+    const isDedupeConflict =
+      e?.code === '23505' &&
+      String(e?.constraint ?? '').includes('entries_user_dedupe_key_active_idx');
+
+    if (isDedupeConflict) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[push] 207 — dedupe_key conflict (safe merge/skip)', {
+          detail: e?.detail,
+          constraint: e?.constraint,
+        });
+      }
+      return Response.json(
+        {
+          ok: true,
+          conflict: 'dedupe_key',
+          message: 'Duplicate dedupe key detected. Entry merged or skipped safely.',
+        },
+        { status: 207 },
+      );
+    }
+
     if (process.env.NODE_ENV !== 'production') {
-      const e = err as Record<string, unknown>;
-      const rawMessage = String(e?.message ?? '');
       console.error('[push] 500 —', {
         name: e?.name,
         messageHead: rawMessage.slice(0, 800),

@@ -7,6 +7,7 @@ import { shouldShowOriginalText } from '@/core/display/display-rules';
 
 interface NoteCardProps {
   note: TimelineEntry;
+  onRead: (note: TimelineEntry) => void;
   onEdit: (note: TimelineEntry) => void;
   onDelete: (id: number) => void;
 }
@@ -35,7 +36,7 @@ function formatCalendarDateLabel(dateStr?: string | null): string | null {
   }).replace(/^\w/, (char) => char.toUpperCase());
 }
 
-export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
+export default function NoteCard({ note, onRead, onEdit, onDelete }: NoteCardProps) {
   const calendar = getCalendarMetadata(note);
   const calendarEvents = sortCalendarEvents(calendar?.events ?? []);
   const calendarDateLabel = formatCalendarDateLabel(note.date);
@@ -44,6 +45,7 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
   return (
     <div
       className="glass-card relative overflow-hidden cursor-pointer active:scale-[0.99]"
+      onClick={() => onRead(note)}
       style={{ transition: 'transform 0.15s ease' }}
     >
         <div
@@ -56,7 +58,7 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
             background: 'linear-gradient(90deg, transparent, rgba(201,168,130,0.3), transparent)',
           }}
         />
-      <div style={{ padding: '18px 20px' }}>
+      <div style={{ padding: '14px 16px' }}>
         <h3
           style={{
             fontSize: '15px',
@@ -158,24 +160,26 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
             ) : null}
           </div>
         ) : (
-          <p
-            style={{
-              fontSize: '13px',
-              color: 'var(--text-secondary)',
-              lineHeight: 1.5,
-              marginTop: '6px',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-            }}
-          >
-            {note.text}
-          </p>
+          <div className="preview-fade" style={{ maxHeight: '3.2em', marginTop: '6px' }}>
+            <p
+              style={{
+                fontSize: '13px',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.5,
+                margin: 0,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              {note.text}
+            </p>
+          </div>
         )}
         <div
           style={{
-            marginTop: '14px',
+            marginTop: '10px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -193,20 +197,10 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
           <div style={{ display: 'flex', gap: '6px' }}>
             <button
               type="button"
+              className="note-action-btn"
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit(note);
-              }}
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
               }}
               aria-label="Editar"
             >
@@ -217,35 +211,16 @@ export default function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
             </button>
             <button
               type="button"
+              className="note-action-btn note-action-btn-danger"
               onClick={(e) => {
                 e.stopPropagation();
                 if (window.confirm('¿Eliminar esta nota?')) {
                   onDelete(note.id!);
                 }
               }}
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'background 0.15s ease, border-color 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(239,68,68,0.12)';
-                e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
-                e.currentTarget.style.borderColor = 'var(--border)';
-              }}
               aria-label="Eliminar"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(239,68,68,0.7)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 6h18" />
                 <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
                 <path d="M10 11v6M14 11v6" />

@@ -2,8 +2,10 @@ import { buildShoppingList, type ShoppingListBuildResult } from './list-builder-
 
 export interface ExtractedTokens {
   rawText: string;
+  baseDate?: Date;
   time: string | null;
   date: string | null;
+  dateSource?: 'explicit' | 'relative' | 'weekday';
   amount: number | null;
   keywords: string[];
   cleanedText: string;
@@ -12,7 +14,7 @@ export interface ExtractedTokens {
   listGroups: string[];
   detectedTags: string[];
   isListLike: boolean;
-  storeType: 'supermercado' | 'feria' | 'farmacia' | 'otro' | null;
+  storeType: ShoppingListBuildResult['storeType'] | null;
   categorizedItems: { label: string; category: string }[];
   shoppingList: ShoppingListBuildResult | null;
 }
@@ -47,8 +49,16 @@ const MONTH_MAP: Record<string, number> = {
   dic: 11,
 };
 
-function getNextDayOfWeek(dayIndex: number): string {
-  const today = new Date();
+export interface ParseTokenOptions {
+  baseDate?: Date;
+}
+
+function getBaseDate(options?: ParseTokenOptions): Date {
+  return options?.baseDate ? new Date(options.baseDate) : new Date();
+}
+
+function getNextDayOfWeek(dayIndex: number, baseDate: Date): string {
+  const today = new Date(baseDate);
   const currentDay = today.getDay();
   let diff = dayIndex - currentDay;
   if (diff <= 0) diff += 7;
@@ -96,21 +106,51 @@ function extractTime(text: string): { time: string | null; cleaned: string } {
   return { time: null, cleaned: text };
 }
 
-function extractDate(text: string): { date: string | null; cleaned: string } {
+function extractDate(text: string, baseDate: Date): { date: string | null; cleaned: string; source?: ExtractedTokens['dateSource'] } {
+  const isoMatch = text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (isoMatch) {
+    return {
+      date: isoMatch[1],
+      source: 'explicit',
+      cleaned: text.replace(isoMatch[0], '').replace(/\s+/g, ' ').trim(),
+    };
+  }
+
+  const monthMatch = text.match(
+    /\b(\d{1,2})\s+(de\s+)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|sept|octubre|nov|noviembre|dic|diciembre)(?:\s+(?:de\s+)?(\d{4}))?\b/i
+  );
+  if (monthMatch) {
+    const day = parseInt(monthMatch[1], 10);
+    const monthName = monthMatch[3].toLowerCase();
+    const month = MONTH_MAP[monthName];
+    if (month !== undefined) {
+      const year = monthMatch[4] ? parseInt(monthMatch[4], 10) : baseDate.getFullYear();
+      const d = new Date(year, month, day);
+      if (!monthMatch[4] && d < baseDate) d.setFullYear(year + 1);
+      return {
+        date: d.toISOString().split('T')[0],
+        source: 'explicit',
+        cleaned: text.replace(monthMatch[0], '').replace(/\s+/g, ' ').trim(),
+      };
+    }
+  }
+
   const todayMatch = text.match(/\bhoy\b/i);
   if (todayMatch) {
     return {
-      date: new Date().toISOString().split('T')[0],
+      date: baseDate.toISOString().split('T')[0],
+      source: 'relative',
       cleaned: text.replace(todayMatch[0], '').replace(/\s+/g, ' ').trim(),
     };
   }
 
   const tomorrowMatch = text.match(/\bmañana\b|\bmanana\b/i);
   if (tomorrowMatch) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrow = new Date(baseDate);
+    tomorrow.setDate(baseDate.getDate() + 1);
     return {
       date: tomorrow.toISOString().split('T')[0],
+      source: 'relative',
       cleaned: text.replace(tomorrowMatch[0], '').replace(/\s+/g, ' ').trim(),
     };
   }
@@ -123,42 +163,24 @@ function extractDate(text: string): { date: string | null; cleaned: string } {
     const dayIndex = DAY_MAP[dayName];
     if (dayIndex !== undefined) {
       return {
-        date: getNextDayOfWeek(dayIndex),
+        date: getNextDayOfWeek(dayIndex, baseDate),
+        source: 'weekday',
         cleaned: text.replace(dayNameMatch[0], '').replace(/\s+/g, ' ').trim(),
       };
     }
-  }
-
-  const monthMatch = text.match(
-    /\b(\d{1,2})\s+(de\s+)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|sept|octubre|nov|noviembre|dic|diciembre)\b/i
-  );
-  if (monthMatch) {
-    const day = parseInt(monthMatch[1], 10);
-    const monthName = monthMatch[3].toLowerCase();
-    const month = MONTH_MAP[monthName];
-    if (month !== undefined) {
-      const year = new Date().getFullYear();
-      const d = new Date(year, month, day);
-      if (d < new Date()) d.setFullYear(year + 1);
-      return {
-        date: d.toISOString().split('T')[0],
-        cleaned: text.replace(monthMatch[0], '').replace(/\s+/g, ' ').trim(),
-      };
-    }
-  }
-
-  const isoMatch = text.match(/(\d{4}-\d{2}-\d{2})/);
-  if (isoMatch) {
-    return {
-      date: isoMatch[1],
-      cleaned: text.replace(isoMatch[0], '').replace(/\s+/g, ' ').trim(),
-    };
   }
 
   return { date: null, cleaned: text };
 }
 
 function extractAmount(text: string): { amount: number | null; cleaned: string } {
+  const isYearLike = (num: number, raw: string) => {
+    if (num < 1900 || num > 2100) return false;
+    if (/\b(comprar|compra|compr[eé]|gasto|gast[eé]|cost[oó])\b/i.test(raw)) return false;
+    return /\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|viaje|vuelos?|año|ano)\b/i.test(raw)
+      || !/\$|\b(clp|pesos?|lucas?|pagar|pago|mensualidad|cuenta|factura|abonar|cobrar|cost[oó])\b/i.test(raw);
+  };
+
   const lucasMatch = text.match(/(\d+(?:[.,]\d{3})?)\s*lucas?/i);
   if (lucasMatch) {
     const cleaned = text
@@ -167,10 +189,8 @@ function extractAmount(text: string): { amount: number | null; cleaned: string }
       .replace(/\s{2,}/g, ' ')
       .trim();
     const raw = lucasMatch[1].replace(/[.,]/g, '');
-    return {
-      amount: parseInt(raw, 10),
-      cleaned,
-    };
+    const amount = parseInt(raw, 10);
+    return { amount: isYearLike(amount, text) ? null : amount, cleaned };
   }
 
   const kMatch = text.match(/(\d+(?:\.\d+)?)\s*k\b/i);
@@ -196,7 +216,7 @@ function extractAmount(text: string): { amount: number | null; cleaned: string }
       .trim();
     const raw = clpMatch[1].replace(/[.,]/g, '');
     const num = parseInt(raw, 10);
-    if (num >= 100) {
+    if (num >= 100 && !isYearLike(num, text)) {
       return {
         amount: num,
         cleaned,
@@ -213,7 +233,7 @@ function extractAmount(text: string): { amount: number | null; cleaned: string }
       .replace(/\s{2,}/g, ' ')
       .trim();
     const num = parseInt(fullNumberMatch[1], 10);
-    if (num >= 100) {
+    if (num >= 100 && !isYearLike(num, text)) {
       return {
         amount: num,
         cleaned,
@@ -245,7 +265,7 @@ function extractListMetadata(text: string): {
   listGroups: string[];
   detectedTags: string[];
   isListLike: boolean;
-  storeType: 'supermercado' | 'feria' | 'farmacia' | 'otro' | null;
+  storeType: ShoppingListBuildResult['storeType'] | null;
   categorizedItems: { label: string; category: string }[];
   shoppingList: ShoppingListBuildResult | null;
 } {
@@ -279,9 +299,10 @@ function extractListMetadata(text: string): {
   };
 }
 
-export function parseTokens(rawText: string): ExtractedTokens {
+export function parseTokens(rawText: string, options?: ParseTokenOptions): ExtractedTokens {
+  const baseDate = getBaseDate(options);
   const { time, cleaned: afterTime } = extractTime(rawText);
-  const { date, cleaned: afterDate } = extractDate(afterTime);
+  const { date, cleaned: afterDate, source: dateSource } = extractDate(afterTime, baseDate);
 
   // Build shopping list from text with only time/date stripped,
   // so item-level prices like "pan 2.900" are preserved.
@@ -296,8 +317,10 @@ export function parseTokens(rawText: string): ExtractedTokens {
 
   return {
     rawText,
+    baseDate: options?.baseDate ? baseDate : undefined,
     time,
     date,
+    dateSource,
     amount: looksLikeShoppingList ? null : amount,
     keywords,
     cleanedText: afterAmount,
@@ -320,7 +343,7 @@ export interface ParsedIntent {
     | 'income'
     | 'pet'
     | 'note';
-  storeType?: 'supermercado' | 'feria' | 'farmacia' | 'otro';
+  storeType?: ShoppingListBuildResult['storeType'];
   items?: { label: string; category: string }[];
   title?: string;
   date?: string | null;

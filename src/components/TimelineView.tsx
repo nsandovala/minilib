@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TimelineEntry, ChecklistItem, EntryType, ShoppingMetadata } from '@/types';
-import { toggleEntryDone, deleteEntry, updateEntry, reparseAndUpdateEntry, toggleShoppingItem } from '@/db/entries';
+import { toggleEntryDone, deleteEntry, reparseAndUpdateEntry, toggleShoppingItem } from '@/db/entries';
 import { toggleChecklistItem } from '@/db/checklist';
 import { db } from '@/db';
 import { recordBelongsToActiveUser } from '@/lib/local-user';
@@ -36,6 +36,8 @@ import {
   shouldShowOriginalText,
 } from '@/core/display/display-rules';
 import { getPrimarySurface } from '@/core/display/surface-resolver';
+import NoteReader from '@/components/notes/NoteReader';
+import NoteEditor from '@/components/notes/NoteEditor';
 
 interface TimelineViewProps {
   entries: TimelineEntry[];
@@ -48,14 +50,14 @@ const TYPE_COLORS: Record<EntryType, string> = {
   health:        '#7a9e7e',
   appointment:   '#7a9e7e',
   reminder:      '#b8944e',
-  task:          'rgba(245,240,235,0.45)',
+  task:          '#9e8a72',
   pet:           '#c9a882',
-  note:          'rgba(245,240,235,0.34)',
+  note:          '#a99e8e',
   shopping_list: '#8faa8b',
 };
 
 const PRIORITY_DOT = {
-  normal:    'rgba(245,240,235,0.2)',
+  normal:    'rgba(120, 100, 80, 0.35)',
   important: '#c9a882',
   urgent:    '#c47070',
 };
@@ -197,8 +199,8 @@ function ChecklistRow({ item, onToggle }: ChecklistRowProps) {
           width: '16px',
           height: '16px',
           borderRadius: '4px',
-          border: `1.5px solid ${item.checked ? '#7a9e7e' : 'rgba(255,248,240,0.18)'}`,
-          background: item.checked ? 'rgba(122,158,126,0.18)' : 'rgba(255,248,240,0.02)',
+          border: `1.5px solid ${item.checked ? '#7a9e7e' : 'var(--divider-strong)'}`,
+          background: item.checked ? 'rgba(122,158,126,0.18)' : 'var(--divider-bg)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -255,8 +257,8 @@ function MetadataChecklistRow({ item, onToggle }: MetadataChecklistRowProps) {
           width: '16px',
           height: '16px',
           borderRadius: '4px',
-          border: `1.5px solid ${item.checked ? '#7a9e7e' : 'rgba(255,248,240,0.18)'}`,
-          background: item.checked ? 'rgba(122,158,126,0.18)' : 'rgba(255,248,240,0.02)',
+          border: `1.5px solid ${item.checked ? '#7a9e7e' : 'var(--divider-strong)'}`,
+          background: item.checked ? 'rgba(122,158,126,0.18)' : 'var(--divider-bg)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -335,6 +337,97 @@ function DetailLine({ label, value }: { label: string; value: string }) {
   );
 }
 
+const NEXT_STEP_NOISE_WORDS = new Set([
+  'a',
+  'al',
+  'de',
+  'del',
+  'el',
+  'en',
+  'hoy',
+  'la',
+  'las',
+  'lo',
+  'los',
+  'marcar',
+  'para',
+  'por',
+  'que',
+  'revisar',
+  'revisarlo',
+  'si',
+  'un',
+  'una',
+  'como',
+  'cuando',
+  'resuelvas',
+  'ya',
+]);
+
+function normalizeDetailText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[.,;:!?¡¿()[\]{}'"`´“”‘’\-_\/\\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeDetailToken(value: string): string {
+  if (/^pag/.test(value)) return 'pago';
+  if (/^compr/.test(value)) return 'compra';
+  return value;
+}
+
+function getMeaningfulDetailTokens(value: string): string[] {
+  return normalizeDetailText(value)
+    .split(' ')
+    .map(normalizeDetailToken)
+    .filter((token) => token && !NEXT_STEP_NOISE_WORDS.has(token));
+}
+
+function readComparableMetadataText(entry: TimelineEntry): string[] {
+  const metadata = entry.metadata;
+  if (!metadata || typeof metadata !== 'object') return [];
+
+  return ['summary', 'originalText', 'body']
+    .map((key) => (metadata as Record<string, unknown>)[key])
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+}
+
+function isSimilarDetailText(nextStep: string, reference: string): boolean {
+  const normalizedNext = normalizeDetailText(nextStep);
+  const normalizedReference = normalizeDetailText(reference);
+
+  if (!normalizedNext || !normalizedReference) return false;
+  if (normalizedNext === normalizedReference) return true;
+  if (normalizedReference.length > 8 && normalizedReference.includes(normalizedNext)) return true;
+  if (normalizedNext.length > 8 && normalizedNext.includes(normalizedReference)) return true;
+
+  const nextTokens = getMeaningfulDetailTokens(nextStep);
+  const referenceTokens = new Set(getMeaningfulDetailTokens(reference));
+
+  if (nextTokens.length === 0) return true;
+  const overlap = nextTokens.filter((token) => referenceTokens.has(token)).length;
+
+  if (nextTokens.length === 1) return overlap === 1;
+  return overlap / nextTokens.length >= 0.75;
+}
+
+function getVisibleNextStep(entry: TimelineEntry, nextStep: string, originalText: string): string {
+  if (!nextStep) return '';
+
+  const references = [
+    entry.title,
+    entry.text,
+    originalText,
+    ...readComparableMetadataText(entry),
+  ].filter((value) => value.trim().length > 0);
+
+  return references.some((reference) => isSimilarDetailText(nextStep, reference)) ? '' : nextStep;
+}
+
 function CalendarDetail({ entry }: { entry: TimelineEntry }) {
   const calendar = getEntryCalendarMetadata(entry);
   if (!calendar) return null;
@@ -360,8 +453,8 @@ function CalendarDetail({ entry }: { entry: TimelineEntry }) {
                 gap: '10px',
                 padding: '8px 10px',
                 borderRadius: '12px',
-                border: '1px solid rgba(255,248,240,0.06)',
-                background: 'rgba(255,248,240,0.025)',
+                border: '1px solid var(--divider)',
+                background: 'var(--divider-bg)',
               }}
             >
               <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: '#c9a882', flexShrink: 0 }}>
@@ -422,6 +515,20 @@ export default function TimelineView({ entries, onRefresh, currentSurface }: Tim
     [entries, pinnedIds],
   );
 
+  const [readingNote, setReadingNote] = useState<TimelineEntry | null>(null);
+  const [editingNote, setEditingNote] = useState<TimelineEntry | null>(null);
+
+  const handleToggleReadingNotePin = (note: TimelineEntry) => {
+    const next = toggleEntryPinned(note);
+    setPinnedIds((prev) => {
+      const updated = new Set(prev);
+      if (next) updated.add(note.localId);
+      else updated.delete(note.localId);
+      return updated;
+    });
+    onRefresh();
+  };
+
   if (timeline.isEmpty) {
     return (
       <div className="empty-state" style={{ padding: '40px 24px' }}>
@@ -436,21 +543,54 @@ export default function TimelineView({ entries, onRefresh, currentSurface }: Tim
   }
 
   return (
-    <div style={{ padding: '14px 20px 24px' }}>
-      {timeline.groups.map((group) => (
-        <TimelineGroup
-          key={group.key}
-          label={group.label}
-          entries={group.entries}
-          groupKey={group.key}
-          collapsedLimit={group.key === 'completed' ? 3 : undefined}
-          checklistByEntry={checklistByEntry}
-          onToggleItem={handleToggleItem}
-          onAction={onRefresh}
-          currentSurface={currentSurface}
+    <>
+      <div style={{ padding: '14px 20px 24px' }}>
+        {timeline.groups.map((group) => (
+          <TimelineGroup
+            key={group.key}
+            label={group.label}
+            entries={group.entries}
+            groupKey={group.key}
+            collapsedLimit={group.key === 'completed' ? 3 : undefined}
+            checklistByEntry={checklistByEntry}
+            onToggleItem={handleToggleItem}
+            onAction={onRefresh}
+            currentSurface={currentSurface}
+            onReadNote={setReadingNote}
+          />
+        ))}
+      </div>
+
+      {readingNote && (
+        <NoteReader
+          note={readingNote}
+          onEdit={(note) => {
+            setReadingNote(null);
+            setEditingNote(note);
+          }}
+          onDelete={async (id) => {
+            await deleteEntry(id);
+            setReadingNote(null);
+            onRefresh();
+          }}
+          onClose={() => setReadingNote(null)}
+          onRefresh={onRefresh}
+          isPinned={pinnedIds.has(readingNote.localId)}
+          onTogglePinned={handleToggleReadingNotePin}
         />
-      ))}
-    </div>
+      )}
+
+      {editingNote && (
+        <NoteEditor
+          note={editingNote}
+          onSave={() => {
+            setEditingNote(null);
+            onRefresh();
+          }}
+          onCancel={() => setEditingNote(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -465,9 +605,10 @@ interface TimelineGroupProps {
   groupKey?: CognitiveGroupKey;
   collapsedLimit?: number;
   currentSurface?: string;
+  onReadNote?: (note: TimelineEntry) => void;
 }
 
-function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onAction, groupKey, collapsedLimit, currentSurface }: TimelineGroupProps) {
+function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onAction, groupKey, collapsedLimit, currentSurface, onReadNote }: TimelineGroupProps) {
   const [showAll, setShowAll] = useState(false);
 
   const deduped = entries.filter((entry, index, arr) => {
@@ -493,7 +634,7 @@ function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onActio
           color: isNow
             ? 'rgba(201,168,130,0.6)'
             : isCompleted
-            ? 'rgba(245,240,235,0.2)'
+            ? 'var(--text-muted)'
             : 'var(--text-muted)',
           textTransform: 'uppercase',
           letterSpacing: '0.07em',
@@ -516,6 +657,7 @@ function TimelineGroup({ label, entries, checklistByEntry, onToggleItem, onActio
             onAction={onAction}
             groupKey={groupKey}
             currentSurface={currentSurface}
+            onReadNote={onReadNote}
           />
         ))}
       </div>
@@ -550,9 +692,10 @@ interface TimelineItemProps {
   onAction: () => void;
   groupKey?: CognitiveGroupKey;
   currentSurface?: string;
+  onReadNote?: (note: TimelineEntry) => void;
 }
 
-function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey, currentSurface }: TimelineItemProps) {
+function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey, currentSurface, onReadNote }: TimelineItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(entry.text);
@@ -653,8 +796,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
   // Collapsed checklist preview (first 3 unchecked items)
   const collapsedItems = isShoppingList
     ? metaShopping
-      ? sortedMetaShoppingItems.slice(0, 3)
-      : sortedChecklistItems.slice(0, 3)
+      ? sortedMetaShoppingItems.slice(0, 1)
+      : sortedChecklistItems.slice(0, 1)
     : [];
 
   const microcopy = groupKey === 'now' ? getMicrocopy(entry) : null;
@@ -669,18 +812,29 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
   const showCalmExplanation = shouldShowCalmExplanation(entry, displayContext);
   const showCorrectionHint = shouldShowCorrectionHint(entry, displayContext);
   const showOriginalText = shouldShowOriginalText(entry, displayContext);
+  const paymentNextStep = isPayment
+    ? getFinancialDirection(entry) === 'income'
+      ? 'dejarlo registrado si ya entró'
+      : 'marcar como pagado cuando lo resuelvas'
+    : '';
+  const visiblePaymentNextStep = isPayment ? getVisibleNextStep(entry, paymentNextStep, detailOriginal) : '';
+  const visibleDefaultNextStep = !isShoppingList && !isCalendar && !isPayment && !isPetOrHealth
+    ? getVisibleNextStep(entry, getEntryNextStep(entry), detailOriginal)
+    : '';
 
   return (
     <div
       id={`timeline-entry-${entry.localId}`}
       className="glass-card"
       style={{
-        padding: '13px 14px',
+        padding: '14px 16px',
         display: 'flex',
         gap: '10px',
         alignItems: 'flex-start',
         opacity: entry.done ? 0.42 : 1,
         transition: 'opacity 0.2s ease',
+        maxHeight: entry.type === 'note' ? 152 : undefined,
+        overflow: entry.type === 'note' ? 'hidden' : undefined,
       }}
     >
       {/* Done circle */}
@@ -723,8 +877,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
               onBlur={handleSaveEdit}
               style={{
                 flex: 1,
-                background: 'rgba(255,248,240,0.06)',
-                border: '1px solid rgba(255,248,240,0.12)',
+                background: 'var(--divider-bg)',
+                border: '1px solid var(--divider-strong)',
                 borderRadius: '8px',
                 padding: '6px 10px',
                 fontSize: '13px',
@@ -736,70 +890,103 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
         ) : (
           <button
             type="button"
-            onClick={() => setExpanded((p) => !p)}
-            aria-expanded={expanded}
+            onClick={entry.type === 'note' ? () => onReadNote?.(entry) : () => setExpanded((p) => !p)}
+            aria-expanded={entry.type === 'note' ? undefined : expanded}
             style={{
               width: '100%',
               background: 'transparent',
               border: 'none',
               padding: 0,
               textAlign: 'left',
-              cursor: 'pointer',
+              cursor: entry.type === 'note' ? 'pointer' : 'pointer',
             }}
           >
-            {/* Type pill + title + priority dot */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-              <span
-                style={{
-                  fontSize: '10px',
-                  padding: '2px 7px',
-                  borderRadius: '999px',
-                  border: `1px solid ${withAlpha(color, 0.2)}`,
-                  background: withAlpha(color, 0.08),
-                  color,
-                  flexShrink: 0,
-                  lineHeight: 1.5,
-                  marginTop: '1px',
-                  textTransform: 'lowercase',
-                }}
-              >
-                {displayType}
-              </span>
+            {entry.type === 'note' ? (
+              <div style={{ minWidth: 0 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '15px',
+                    fontWeight: 500,
+                    color: 'var(--text-primary)',
+                    letterSpacing: '-0.01em',
+                    lineHeight: 1.35,
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {entry.title || 'Sin título'}
+                </p>
+                <div className="preview-fade" style={{ maxHeight: '3.2em', marginTop: '4px' }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '13px',
+                      color: 'var(--text-secondary)',
+                      lineHeight: 1.5,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {entry.text}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    padding: '2px 7px',
+                    borderRadius: '999px',
+                    border: `1px solid ${withAlpha(color, 0.2)}`,
+                    background: withAlpha(color, 0.08),
+                    color,
+                    flexShrink: 0,
+                    lineHeight: 1.5,
+                    marginTop: '1px',
+                    textTransform: 'lowercase',
+                  }}
+                >
+                  {displayType}
+                </span>
 
-              <p
-                style={{
-                  margin: 0,
-                  flex: 1,
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  color: entry.done ? 'var(--text-secondary)' : 'var(--text-primary)',
-                  textDecoration: entry.done ? 'line-through' : 'none',
-                  lineHeight: 1.42,
-                  wordBreak: 'break-word',
-                }}
-              >
-                {title}
-              </p>
+                <p
+                  style={{
+                    margin: 0,
+                    flex: 1,
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: entry.done ? 'var(--text-secondary)' : 'var(--text-primary)',
+                    textDecoration: entry.done ? 'line-through' : 'none',
+                    lineHeight: 1.42,
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {title}
+                </p>
 
-              <span
-                aria-hidden="true"
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '999px',
-                  background: PRIORITY_DOT[priority],
-                  flexShrink: 0,
-                  marginTop: '6px',
-                }}
-              />
-            </div>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '999px',
+                    background: PRIORITY_DOT[priority],
+                    flexShrink: 0,
+                    marginTop: '6px',
+                  }}
+                />
+              </div>
+            )}
 
-            {/* Microcopy — only in "Ahora" group for pending entries */}
-            {microcopy && (
+            {/* Microcopy — only in "Ahora" group for pending entries, skip notes */}
+            {microcopy && entry.type !== 'note' && (
               <p style={{
-                margin: '3px 0 0',
+                margin: '2px 0 0',
                 fontSize: '10px',
-                color: microcopy.startsWith('vencido') ? 'rgba(196,112,112,0.6)' : 'rgba(201,168,130,0.5)',
+                color: microcopy.startsWith('vencido') ? 'rgba(196,112,112,0.5)' : 'rgba(201,168,130,0.4)',
                 paddingLeft: '0',
                 lineHeight: 1.3,
               }}>
@@ -809,14 +996,14 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
 
             {/* Shopping list: category tag */}
             {isShoppingList && checklistCategory && (
-              <p style={{ margin: '3px 0 0', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.35 }}>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.35 }}>
                 {checklistCategory}
               </p>
             )}
 
             {/* Collapsed checklist preview */}
             {isShoppingList && !expanded && collapsedItems.length > 0 && (
-              <div style={{ display: 'grid', gap: '4px', marginTop: '8px', paddingLeft: '2px' }}>
+              <div style={{ display: 'grid', gap: '3px', marginTop: '6px', paddingLeft: '2px' }}>
                 {metaShopping
                   ? collapsedItems.map((item) => (
                       <div key={(item as { id: string }).id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -826,8 +1013,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                             width: '13px',
                             height: '13px',
                             borderRadius: '3px',
-                            border: `1px solid ${(item as { checked: boolean }).checked ? 'rgba(122,158,126,0.4)' : 'rgba(255,248,240,0.14)'}`,
-                            background: (item as { checked: boolean }).checked ? 'rgba(122,158,126,0.1)' : 'rgba(255,248,240,0.02)',
+                          border: `1px solid ${(item as { checked: boolean }).checked ? 'rgba(122,158,126,0.4)' : 'var(--divider-strong)'}`,
+                          background: (item as { checked: boolean }).checked ? 'rgba(122,158,126,0.1)' : 'var(--divider-bg)',
                             flexShrink: 0,
                             display: 'flex',
                             alignItems: 'center',
@@ -858,8 +1045,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                             width: '13px',
                             height: '13px',
                             borderRadius: '3px',
-                            border: `1px solid ${item.checked ? 'rgba(122,158,126,0.4)' : 'rgba(255,248,240,0.14)'}`,
-                            background: item.checked ? 'rgba(122,158,126,0.1)' : 'rgba(255,248,240,0.02)',
+                          border: `1px solid ${item.checked ? 'rgba(122,158,126,0.4)' : 'var(--divider-strong)'}`,
+                          background: item.checked ? 'rgba(122,158,126,0.1)' : 'var(--divider-bg)',
                             flexShrink: 0,
                             display: 'flex',
                             alignItems: 'center',
@@ -883,195 +1070,189 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                       </div>
                     ))}
                 {metaShopping
-                  ? shoppingItems.length > 3 && (
+                  ? shoppingItems.length > 1 && (
                       <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>
-                        +{shoppingItems.length - 3} más
+                        +{shoppingItems.length - 1} más
                       </p>
                     )
-                  : checklistItems.length > 3 && (
+                  : checklistItems.length > 1 && (
                       <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>
-                        +{checklistItems.length - 3} más
+                        +{checklistItems.length - 1} más
                       </p>
                     )}
               </div>
             )}
 
             {/* Meta row: date/amount/status/progress */}
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '6px' }}>
               {whenLabel && (
                 <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: checkOverdue(entry) ? '#c47070' : 'var(--text-secondary)' }}>
                   {whenLabel}
                 </span>
               )}
-              {amountLabel && !isShoppingList && (
-                <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#c9a882' }}>
-                  {amountLabel}
-                </span>
-              )}
-              {isPayment && statusText && (
-                <span
-                  style={{
-                    fontSize: '10px',
-                    padding: '2px 7px',
-                    borderRadius: '999px',
-                    color: statusText === 'vencido' ? '#c47070' : statusText === 'pendiente' ? '#b8944e' : '#7a9e7e',
-                    background: statusText === 'vencido' ? 'rgba(196,112,112,0.08)' : statusText === 'pendiente' ? 'rgba(184,148,78,0.08)' : 'rgba(122,158,126,0.08)',
-                    border: '1px solid rgba(255,248,240,0.08)',
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {statusText}
-                </span>
-              )}
-              {isShoppingList && (
-                <ProgressLabel
-                  total={metaShopping ? shoppingItems.length : checklistItems.length}
-                  checked={metaShopping ? shoppingItems.filter((i) => i.checked).length : checklistItems.filter((i) => i.checked).length}
-                  totalEstimated={metaShopping?.progress.totalEstimated}
-                  totalChecked={metaShopping?.progress.totalChecked}
-                />
-              )}
-              {isPetOrHealth && priority !== 'normal' && (
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                  {priority === 'urgent' ? 'urgente' : 'importante'}
-                </span>
+              {entry.type !== 'note' && (
+                <>
+                  {amountLabel && !isShoppingList && (
+                    <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#c9a882' }}>
+                      {amountLabel}
+                    </span>
+                  )}
+                  {isPayment && statusText && (
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        padding: '2px 7px',
+                        borderRadius: '999px',
+                        color: statusText === 'vencido' ? '#c47070' : statusText === 'pendiente' ? '#b8944e' : '#7a9e7e',
+                        background: statusText === 'vencido' ? 'rgba(196,112,112,0.08)' : statusText === 'pendiente' ? 'rgba(184,148,78,0.08)' : 'rgba(122,158,126,0.08)',
+                        border: '1px solid var(--divider)',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {statusText}
+                    </span>
+                  )}
+                  {isShoppingList && (
+                    <ProgressLabel
+                      total={metaShopping ? shoppingItems.length : checklistItems.length}
+                      checked={metaShopping ? shoppingItems.filter((i) => i.checked).length : checklistItems.filter((i) => i.checked).length}
+                      totalEstimated={metaShopping?.progress.totalEstimated}
+                      totalChecked={metaShopping?.progress.totalChecked}
+                    />
+                  )}
+                  {isPetOrHealth && priority !== 'normal' && (
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                      {priority === 'urgent' ? 'urgente' : 'importante'}
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </button>
         )}
 
         {/* Expanded section — outside the button so interactive elements are valid */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateRows: expanded ? '1fr' : '0fr',
-            transition: 'grid-template-rows 0.22s ease',
-            marginTop: expanded ? '10px' : 0,
-          }}
-        >
-          <div style={{ overflow: 'hidden' }}>
-            {expanded && (
-              <div
-                style={{
-                  borderTop: '1px solid rgba(255,248,240,0.08)',
-                  paddingTop: '10px',
-                  display: 'grid',
-                  gap: '7px',
-                }}
-              >
-                {isShoppingList ? (
-                  <div style={{ display: 'grid', gap: '2px' }}>
-                    {metaShopping ? (
-                      shoppingItems.length === 0 ? (
-                        <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Lista sin ítems</p>
+        {/* TODO(Fase 2): open NoteReader overlay on tap instead of inline expand */}
+        {entry.type !== 'note' && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateRows: expanded ? '1fr' : '0fr',
+              transition: 'grid-template-rows 0.22s ease',
+              marginTop: expanded ? '10px' : 0,
+            }}
+          >
+            <div style={{ overflow: 'hidden' }}>
+              {expanded && (
+                <div
+                  style={{
+                    borderTop: '1px solid var(--divider)',
+                    paddingTop: '10px',
+                    display: 'grid',
+                    gap: '7px',
+                  }}
+                >
+                  {isShoppingList ? (
+                    <div style={{ display: 'grid', gap: '2px' }}>
+                      {metaShopping ? (
+                        shoppingItems.length === 0 ? (
+                          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Lista sin ítems</p>
+                        ) : (
+                          <>
+                            {shoppingItems.map((item) => (
+                              <MetadataChecklistRow
+                                key={item.id}
+                                item={item}
+                                onToggle={() => entry.id !== undefined && toggleShoppingItem(entry.id, item.id)}
+                              />
+                            ))}
+                            {metaShopping.progress.totalEstimated > 0 && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  marginTop: '6px',
+                                  paddingTop: '6px',
+                                  borderTop: '1px solid var(--divider)',
+                                }}
+                              >
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                  {metaShopping.progress.totalChecked > 0 ? 'Comprado' : 'Total estimado'}
+                                </span>
+                                <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: '#c9a882', fontWeight: 600 }}>
+                                  {metaShopping.progress.totalChecked > 0
+                                    ? `${formatCLP(metaShopping.progress.totalChecked)} / ${formatCLP(metaShopping.progress.totalEstimated)}`
+                                    : formatCLP(metaShopping.progress.totalEstimated)}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        )
+                      ) : checklistItems.length === 0 ? (
+                        <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Sin ítems detectados</p>
                       ) : (
-                        <>
-                          {shoppingItems.map((item) => (
-                            <MetadataChecklistRow
-                              key={item.id}
-                              item={item}
-                              onToggle={() => entry.id !== undefined && toggleShoppingItem(entry.id, item.id)}
-                            />
-                          ))}
-                          {metaShopping.progress.totalEstimated > 0 && (
-                            <div
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginTop: '6px',
-                                paddingTop: '6px',
-                                borderTop: '1px solid rgba(255,248,240,0.06)',
-                              }}
-                            >
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                {metaShopping.progress.totalChecked > 0 ? 'Comprado' : 'Total estimado'}
-                              </span>
-                              <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: '#c9a882', fontWeight: 600 }}>
-                                {metaShopping.progress.totalChecked > 0
-                                  ? `${formatCLP(metaShopping.progress.totalChecked)} / ${formatCLP(metaShopping.progress.totalEstimated)}`
-                                  : formatCLP(metaShopping.progress.totalEstimated)}
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      )
-                    ) : checklistItems.length === 0 ? (
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Sin ítems detectados</p>
-                    ) : (
-                      checklistItems.map((item) => (
-                        <ChecklistRow key={item.localId} item={item} onToggle={onToggleItem} />
-                      ))
-                    )}
-                    {showOriginalText && detailOriginal && (
-                      <p style={{ margin: '8px 0 0', fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                        {detailOriginal}
-                      </p>
-                    )}
-                  </div>
-                ) : isCalendar ? (
-                  <CalendarDetail entry={entry} />
-                ) : isPayment ? (
-                  <>
-                    {showCalmExplanation && (
-                      <DetailLine label="Liev" value={
-                      getFinancialDirection(entry) === 'income'
-                        ? 'Ingreso registrado'
-                        : (calmExplanation ?? 'Pago pendiente')
-                      } />
-                    )}
-                    <DetailLine label="Monto" value={amountLabel} />
-                    <DetailLine label="Cuándo" value={whenLabel} />
-                    <DetailLine label="Tipo" value={`${getFinancialDirection(entry) === 'income' ? 'ingreso' : 'egreso'} / ${getFinancialCategory(entry)}`} />
-                    <DetailLine label="Estado" value={statusText} />
-                    <DetailLine label="Próximo paso" value={getFinancialDirection(entry) === 'income' ? 'dejarlo registrado si ya entró' : 'marcar como pagado cuando lo resuelvas'} />
-                    {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
-                  </>
-                ) : isPetOrHealth ? (
-                  <>
-                    {showCalmExplanation && (
-                      <DetailLine label="Liev" value={calmExplanation ?? (entry.type === 'pet' ? 'Cuidado de mascota' : 'Cuidado personal')} />
-                    )}
-                    <DetailLine label="Cuándo" value={whenLabel} />
-                    <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
-                    {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
-                  </>
-                ) : entry.type === 'note' ? (
-                  <>
-                    {/* Only show Liev explanation when genuinely needed (low confidence / auto-corrected) */}
-                    {showCalmExplanation && calmExplanation && (
-                      <DetailLine label="Liev" value={calmExplanation} />
-                    )}
-                    {/* Show note body directly without a "Detalle original" label */}
-                    {showOriginalText && detailOriginal && (
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                        {detailOriginal}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {showCalmExplanation && calmExplanation && <DetailLine label="Liev" value={calmExplanation} />}
-                    <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
-                    <DetailLine label="Cuándo" value={whenLabel} />
-                    {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
-                  </>
-                )}
-                {showCorrectionHint && correctionHint && (
-                  <p style={{
-                    margin: '4px 0 0',
-                    fontSize: '10px',
-                    color: 'rgba(245,240,235,0.22)',
-                    lineHeight: 1.5,
-                    fontStyle: 'italic',
-                  }}>
-                    {correctionHint}
-                  </p>
-                )}
-              </div>
-            )}
+                        checklistItems.map((item) => (
+                          <ChecklistRow key={item.localId} item={item} onToggle={onToggleItem} />
+                        ))
+                      )}
+                      {showOriginalText && detailOriginal && (
+                        <p style={{ margin: '8px 0 0', fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                          {detailOriginal}
+                        </p>
+                      )}
+                    </div>
+                  ) : isCalendar ? (
+                    <CalendarDetail entry={entry} />
+                  ) : isPayment ? (
+                    <>
+                      {showCalmExplanation && (
+                        <DetailLine label="Liev" value={
+                        getFinancialDirection(entry) === 'income'
+                          ? 'Ingreso registrado'
+                          : (calmExplanation ?? 'Pago pendiente')
+                        } />
+                      )}
+                      <DetailLine label="Monto" value={amountLabel} />
+                      <DetailLine label="Cuándo" value={whenLabel} />
+                      <DetailLine label="Tipo" value={`${getFinancialDirection(entry) === 'income' ? 'ingreso' : 'egreso'} / ${getFinancialCategory(entry)}`} />
+                      <DetailLine label="Estado" value={statusText} />
+                      <DetailLine label="Próximo paso" value={visiblePaymentNextStep} />
+                      {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
+                    </>
+                  ) : isPetOrHealth ? (
+                    <>
+                      {showCalmExplanation && (
+                        <DetailLine label="Liev" value={calmExplanation ?? (entry.type === 'pet' ? 'Cuidado de mascota' : 'Cuidado personal')} />
+                      )}
+                      <DetailLine label="Cuándo" value={whenLabel} />
+                      <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
+                      {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
+                    </>
+                  ) : (
+                    <>
+                      {showCalmExplanation && calmExplanation && <DetailLine label="Liev" value={calmExplanation} />}
+                      <DetailLine label="Próximo paso" value={visibleDefaultNextStep} />
+                      <DetailLine label="Cuándo" value={whenLabel} />
+                      {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
+                    </>
+                  )}
+                  {showCorrectionHint && correctionHint && (
+                    <p style={{
+                      margin: '4px 0 0',
+                      fontSize: '10px',
+                      color: 'var(--text-muted)',
+                      lineHeight: 1.5,
+                      fontStyle: 'italic',
+                    }}>
+                      {correctionHint}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Pin + edit + delete */}

@@ -265,7 +265,7 @@ export default function HomePage() {
 
   if (!isSignedIn) {
     return (
-      <div className="landing-root">
+      <div className="landing-root" style={{ backgroundColor: '#0a0805', minHeight: '100vh' }}>
         <main className="landing-main">
           {/* Brand — top-left */}
           <header className="landing-header">

@@ -17,9 +17,9 @@ const TYPE_COLORS: Record<string, string> = {
   health:      '#7a9e7e',
   appointment: '#b09ab8',
   reminder:    '#b8944e',
-  task:        'rgba(245,240,235,0.45)',
+  task:        '#9e8a72',
   pet:         '#c9a882',
-  note:        'rgba(245,240,235,0.3)',
+  note:        '#a99e8e',
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -129,9 +129,8 @@ export default function MiniCalendar({ entries }: MiniCalendarProps) {
         margin: '10px 20px 0',
         padding: '16px',
         borderRadius: '20px',
-        border: '1px solid rgba(255,248,240,0.09)',
-        background:
-          'linear-gradient(160deg, rgba(255,248,240,0.065) 0%, rgba(201,168,130,0.04) 100%)',
+        border: '1px solid var(--glass-border)',
+        background: 'var(--glass-bg)',
         backdropFilter: 'blur(18px)',
         WebkitBackdropFilter: 'blur(18px)',
         boxShadow: '0 8px 28px rgba(0,0,0,0.16)',
@@ -168,8 +167,8 @@ export default function MiniCalendar({ entries }: MiniCalendarProps) {
                   width: '26px',
                   height: '26px',
                   borderRadius: '8px',
-                  border: '1px solid rgba(255,248,240,0.08)',
-                  background: 'rgba(255,248,240,0.04)',
+                  border: '1px solid var(--glass-border)',
+                  background: 'var(--surface-soft)',
                   color: 'var(--text-secondary)',
                   fontSize: '16px',
                   lineHeight: 1,
@@ -296,7 +295,7 @@ export default function MiniCalendar({ entries }: MiniCalendarProps) {
         <div
           style={{
             marginTop: '14px',
-            borderTop: '1px solid rgba(255,248,240,0.07)',
+            borderTop: '1px solid var(--glass-border)',
             paddingTop: '12px',
           }}
         >
@@ -353,7 +352,7 @@ function CalendarEntryRow({ entry }: { entry: TimelineEntry }) {
           display: 'grid',
           gap: '8px',
           padding: '9px 0',
-          borderBottom: '1px solid rgba(255,248,240,0.04)',
+          borderBottom: '1px solid var(--divider)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -396,8 +395,8 @@ function CalendarEntryRow({ entry }: { entry: TimelineEntry }) {
                   gap: '10px',
                   padding: '8px 10px',
                   borderRadius: '12px',
-                  border: '1px solid rgba(255,248,240,0.06)',
-                  background: 'rgba(255,248,240,0.025)',
+                  border: '1px solid var(--divider)',
+                  background: 'var(--divider-bg)',
                 }}
               >
                 <span

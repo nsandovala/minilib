@@ -17,7 +17,9 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    titleRef.current?.focus();
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      titleRef.current?.focus();
+    }
   }, []);
 
   useEffect(() => {

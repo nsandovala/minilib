@@ -23,32 +23,32 @@ const TYPE_ACCENT: Record<string, string> = {
   appointment:   '#7a9e7e',
   pet:           '#c9a882',
   shopping_list: '#8faa8b',
-  task:          'rgba(245,240,235,0.55)',
-  reminder:      'rgba(245,240,235,0.55)',
-  note:          'rgba(245,240,235,0.34)',
+  task:          '#9e8a72',
+  reminder:      '#b8944e',
+  note:          '#a99e8e',
 };
 
 export default function NextBestAction({ entries }: NextBestActionProps) {
-  const top = useMemo(() =>
-    entries
+  const top = useMemo(() => {
+    const scored = entries
       .filter((e) => !e.done)
       .map((e) => ({ entry: e, score: computePriorityScore(e) }))
-      .filter(({ score }) => score >= 60)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3)
-      .map(({ entry }) => entry),
-    [entries],
-  );
+      .sort((a, b) => b.score - a.score);
+
+    const urgent = scored.filter(({ score }) => score >= 60);
+    const remaining = scored.filter(({ score }) => score < 60);
+    const selected = [...urgent, ...remaining];
+
+    return selected.slice(0, 3).map(({ entry }) => entry);
+  }, [entries]);
 
   const scrollToEntry = useCallback((localId: string) => {
     const el = document.getElementById(`timeline-entry-${localId}`);
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.style.outline = '1px solid rgba(201,168,130,0.4)';
+    el.style.outline = '1px solid var(--border-active)';
     setTimeout(() => { el.style.outline = ''; }, 900);
   }, []);
-
-  if (top.length === 0) return null;
 
   return (
     <div style={{ padding: '0 20px 8px' }}>
@@ -57,12 +57,17 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
         fontWeight: 500,
         letterSpacing: '0.12em',
         textTransform: 'uppercase',
-        color: 'rgba(233,204,169,0.4)',
+        color: 'var(--text-muted)',
         margin: '0 0 8px 2px',
       }}>
         Ahora
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        {top.length === 0 && (
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', padding: '8px 4px' }}>
+            Sin prioridades pendientes
+          </p>
+        )}
         {top.map((entry) => {
           const displayType     = getAgentForType(entry.type)?.ui.label ?? getEntryDisplayType(entry);
           const correctionHint  = getAgentForType(entry.type)?.ui.correctionHint ?? null;
@@ -88,8 +93,8 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
                 gap: '10px',
                 padding: '10px 12px',
                 borderRadius: '14px',
-                background: 'rgba(255,248,240,0.024)',
-                border: `1px solid ${priority === 'urgent' ? 'rgba(196,112,112,0.12)' : 'rgba(232,202,165,0.07)'}`,
+                background: 'var(--surface-soft)',
+                border: `1px solid ${priority === 'urgent' ? 'rgba(196,112,112,0.12)' : 'var(--glass-border)'}`,
                 cursor: 'pointer',
                 width: '100%',
                 textAlign: 'left',
@@ -97,14 +102,14 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
                 transition: 'background 0.12s ease',
               }}
               onPointerDown={(e) => {
-                e.currentTarget.style.background = 'rgba(255,248,240,0.048)';
+                e.currentTarget.style.background = 'var(--bg-surface)';
               }}
               onPointerUp={(e) => {
                 const target = e.currentTarget;
-                setTimeout(() => { target.style.background = 'rgba(255,248,240,0.024)'; }, 140);
+                setTimeout(() => { target.style.background = 'var(--surface-soft)'; }, 140);
               }}
               onPointerLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255,248,240,0.024)';
+                e.currentTarget.style.background = 'var(--surface-soft)';
               }}
             >
               <div style={{
@@ -154,7 +159,7 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
                 <p style={{
                   margin: 0,
                   fontSize: '11px',
-                  color: 'rgba(245,240,235,0.34)',
+                  color: 'var(--text-secondary)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -165,7 +170,7 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
                   <p style={{
                     margin: '2px 0 0',
                     fontSize: '10px',
-                    color: 'rgba(245,240,235,0.18)',
+                    color: 'var(--text-muted)',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
@@ -178,7 +183,7 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
 
               <span aria-hidden="true" style={{
                 fontSize: '11px',
-                color: 'rgba(232,202,165,0.22)',
+                color: 'var(--text-muted)',
                 marginTop: '3px',
                 flexShrink: 0,
                 lineHeight: 1,

@@ -116,12 +116,12 @@ function ConditionIcon({
 
 function conditionColor(condition: WeatherCondition, isDay: boolean): string {
   if (condition === 'clear') return isDay ? '#c9a882' : '#b09ab8';
-  if (condition === 'cloudy') return 'rgba(245,240,235,0.5)';
-  if (condition === 'fog') return 'rgba(245,240,235,0.4)';
+  if (condition === 'cloudy') return '#9e8a72';
+  if (condition === 'fog') return '#9e8a72';
   if (condition === 'drizzle' || condition === 'rain') return '#7a9e7e';
   if (condition === 'snow') return '#b09ab8';
   if (condition === 'storm') return '#c47070';
-  return 'rgba(245,240,235,0.5)';
+  return '#9e8a72';
 }
 
 const LS_KEY = 'liev:weather:permission';
@@ -206,7 +206,7 @@ export default function WeatherPill(): JSX.Element | null {
           width: 6,
           height: 6,
           borderRadius: '50%',
-          background: 'rgba(245,240,235,0.25)',
+          background: 'rgba(120, 100, 80, 0.35)',
           display: 'inline-block',
         }}
       />

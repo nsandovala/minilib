@@ -12,6 +12,7 @@ const isPublicRoute = createRouteMatcher([
   '/favicon.ico',
   '/icons(.*)',
   '/_next(.*)',
+  '/api/radar/intake',
 ]);
 
 const runClerkAuth = clerkMiddleware(async (auth, request) => {

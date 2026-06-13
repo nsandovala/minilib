@@ -6,6 +6,7 @@ import { useEntries } from '@/hooks/useEntries';
 import { getNoteEntries, queryEntries } from '@/core/queries/entry-queries';
 import type { TimelineEntry } from '@/types';
 import NoteCard from '@/components/notes/NoteCard';
+import NoteReader from '@/components/notes/NoteReader';
 import NoteEditor from '@/components/notes/NoteEditor';
 import { NOTE_AGENT } from '@/core/card-agents';
 
@@ -18,6 +19,8 @@ export default function NotesPage() {
   );
   const [showEditor, setShowEditor] = useState(false);
   const [editingNote, setEditingNote] = useState<TimelineEntry | null>(null);
+  const [showReader, setShowReader] = useState(false);
+  const [readingNote, setReadingNote] = useState<TimelineEntry | null>(null);
 
   const handleDelete = async (id: number) => {
     try {
@@ -104,6 +107,10 @@ export default function NotesPage() {
           <NoteCard
             key={note.id}
             note={note}
+            onRead={(n) => {
+              setReadingNote(n);
+              setShowReader(true);
+            }}
             onEdit={(n) => {
               setEditingNote(n);
               setShowEditor(true);
@@ -112,6 +119,23 @@ export default function NotesPage() {
           />
         ))}
       </div>
+
+      {showReader && readingNote && (
+        <NoteReader
+          note={readingNote}
+          onEdit={(n) => {
+            setShowReader(false);
+            setReadingNote(null);
+            setEditingNote(n);
+            setShowEditor(true);
+          }}
+          onDelete={handleDelete}
+          onClose={() => {
+            setShowReader(false);
+            setReadingNote(null);
+          }}
+        />
+      )}
 
       {showEditor && (
         <NoteEditor

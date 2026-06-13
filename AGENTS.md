@@ -70,7 +70,15 @@ npm run db:studio  # Open Drizzle Studio
 
 ## Testing
 
-No test framework or tests exist yet. The `test-gen` agent command is available but unconfigured.
+Tests run with Node.js built-in test runner and `--experimental-strip-types`:
+
+```bash
+node --experimental-strip-types tests/radar-intake.test.mjs
+node --experimental-strip-types tests/surface-resolver.test.mjs
+# ... etc
+```
+
+All `.test.mjs` files in `tests/` are active. Run `npm run typecheck` after every code change.
 
 ## Deployment
 

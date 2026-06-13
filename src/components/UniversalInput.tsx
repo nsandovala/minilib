@@ -6,6 +6,7 @@ import { addEntry } from '@/db/entries';
 import type { EntryType, ParsedEntry } from '@/types';
 import { shouldSubmitFromComposerKey } from './UniversalInput.shortcuts';
 import { radarIntake, radarToEntry } from '@/lib/radar';
+import { backgroundReclassify } from '@/lib/background-reclassify';
 
 const RADAR_ENABLED = process.env.NEXT_PUBLIC_LIEV_RADAR_ENABLED === 'true';
 
@@ -260,7 +261,7 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
         entry = result.entry;
       }
 
-      await addEntry(entry);
+      const newId = await addEntry(entry);
       setSavedType(TYPE_LABELS[entry.type] ?? entry.type);
       setText('');
       setPreviewType(null);
@@ -270,6 +271,11 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
       setJustSaved(true);
       onEntryAdded();
       setTimeout(() => { setJustSaved(false); setSavedType(null); }, 2000);
+
+      // Background reclassification if confidence was low
+      if (typeof newId === 'number' && entry.confidence !== undefined && entry.confidence < 0.82) {
+        void backgroundReclassify(newId, entry.title ?? trimmed, trimmed, entry.type, entry.confidence);
+      }
     } catch (err) {
       // Log safely in production (no user data)
       if (process.env.NODE_ENV === 'development') {
@@ -307,19 +313,12 @@ export default function UniversalInput({ onEntryAdded, weatherHint, source }: Un
     <div style={{ padding: '0 20px' }}>
       <form onSubmit={handleSubmit}>
         <div
-          className="glass-card"
+          className={`glass-card ${justSaved ? 'input-just-saved' : error ? 'input-error' : ''}`}
           style={{
             padding: '4px',
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            background: 'var(--glass-bg)',
-            borderColor: justSaved
-              ? 'rgba(122, 158, 126, 0.35)'
-              : error
-              ? 'rgba(196, 112, 112, 0.35)'
-              : 'var(--border-soft)',
-            boxShadow: 'var(--shadow-soft)',
             transition: 'border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease',
           }}
         >

@@ -67,7 +67,18 @@ export type EntryType =
 
 export type ShoppingStage = 'pending' | 'shopping' | 'completed';
 
-export type StoreType = 'supermercado' | 'feria' | 'farmacia' | 'otro';
+export type StoreType =
+  | 'supermercado'
+  | 'farmacia'
+  | 'feria'
+  | 'minimarket'
+  | 'botilleria'
+  | 'mall'
+  | 'mall_chino'
+  | 'panaderia'
+  | 'carniceria'
+  | 'verduleria'
+  | 'otro';
 
 export interface ShoppingItem {
   id: string;

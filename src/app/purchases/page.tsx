@@ -103,7 +103,7 @@ function ShoppingSummary({ lists, itemsByEntry }: ShoppingSummaryProps) {
             style={{
               height: '3px',
               borderRadius: '999px',
-              background: 'rgba(255,248,240,0.08)',
+                background: 'var(--divider)',
               overflow: 'hidden',
             }}
           >

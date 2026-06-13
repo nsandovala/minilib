@@ -32,7 +32,7 @@ const TYPE_PATTERNS: Record<EntryType, RegExp[]> = {
     /\b(recordar|recordatorio|acordarse|no\s+olvidar|alerta|avisar)\b/i,
   ],
   task: [
-    /\b(comprar|llevar|sacar|hacer|limpiar|lavar|cocinar|preparar|arreglar|revisar|cambiar|ir\s+a|pasar\s+por|buscar|entregar|devolver|agendar)\b/i,
+    /\b(comprar|llevar|sacar|hacer|limpiar|lavar|cocinar|preparar|arreglar|revisar|cambiar|ir\s+a|pasar\s+por|buscar|entregar|devolver|agendar|realizar|imprimir|contactar|avisar|enviar|recoger)\b/i,
   ],
   note: [],
   shopping_list: [],
@@ -233,7 +233,7 @@ export function normalizeEntry(tokens: ExtractedTokens, source?: string): Parsed
   const type = classification.confidence >= threshold ? classification.type : 'note';
 
   const calendarResult = type !== 'payment'
-    ? parseCalendarEventInput(tokens.rawText)
+    ? parseCalendarEventInput(tokens.rawText, tokens.baseDate)
     : null;
   const calendarMetadata = calendarResult?.metadata ?? null;
   const shouldPreferCalendarTitle =
@@ -244,6 +244,11 @@ export function normalizeEntry(tokens: ExtractedTokens, source?: string): Parsed
   const title = shouldPreferCalendarTitle
     ? calendarResult.title!
     : buildTitle(tokens, type, calendarMetadata);
+  const date = tokens.dateSource === 'explicit'
+    ? tokens.date ?? undefined
+    : calendarResult?.matched
+      ? calendarResult.date ?? undefined
+      : tokens.date ?? undefined;
   const tags = Array.from(new Set([...buildTags(tokens.rawText, type), ...tokens.detectedTags]));
   // Only attach shopping metadata when the resolved type is actually a list type.
   // Attaching it to 'note' or 'task' entries causes them to leak into /purchases.
@@ -269,10 +274,10 @@ export function normalizeEntry(tokens: ExtractedTokens, source?: string): Parsed
     text: tokens.rawText,
     type,
     title,
-    date: calendarResult?.matched ? calendarResult.date ?? undefined : tokens.date ?? undefined,
+    date,
     time: calendarResult?.matched ? calendarResult.time ?? undefined : tokens.time ?? undefined,
     tags,
-    amount: shoppingTotal ?? tokens.amount ?? undefined,
+    amount: type === 'payment' ? tokens.amount ?? undefined : undefined,
     checklistItems: tokens.checklistItems.length ? tokens.checklistItems : undefined,
     listItems: tokens.listItems.length ? tokens.listItems : undefined,
     listGroups: tokens.listGroups.length ? tokens.listGroups : undefined,
