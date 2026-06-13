@@ -785,6 +785,83 @@ test('local-4: ir al médico mañana a las 15:00 → appointment/calendar con fe
   assert.equal(entry.amount, undefined);
 });
 
+test('shopping-date-cleanup-1: fecha día mes no entra como item de compra', () => {
+  const text = '21 junio comprar pan, lechuga, bebidas';
+  const radar = buildHeuristicRadarResult(text);
+  assert.equal(radar.type, 'shopping_list');
+  assert.equal(radar.date_text, '21 junio');
+  assert.deepEqual(radar.checklist_items, ['pan', 'lechuga', 'bebidas']);
+  assert.ok(!radar.checklist_items.includes('21'));
+  assert.ok(!radar.checklist_items.includes('junio'));
+
+  const entry = localParse(text);
+  assert.equal(entry.type, 'shopping_list');
+  assert.equal(entry.date, '2026-06-21');
+  assert.deepEqual(entry.checklistItems, ['pan', 'lechuga', 'bebidas']);
+});
+
+test('shopping-date-cleanup-2: weekday no pisa fecha explícita ni se pega al primer item', () => {
+  const text = 'domingo 21 de junio comprar pan, lechuga';
+  const radar = buildHeuristicRadarResult(text);
+  assert.equal(radar.type, 'shopping_list');
+  assert.equal(radar.date_text, '21 de junio');
+  assert.deepEqual(radar.checklist_items, ['pan', 'lechuga']);
+  assert.ok(!radar.checklist_items.includes('domingo'));
+  assert.ok(!radar.checklist_items.includes('21'));
+  assert.ok(!radar.checklist_items.includes('junio'));
+
+  const entry = localParse(text);
+  assert.equal(entry.type, 'shopping_list');
+  assert.equal(entry.date, '2026-06-21');
+  assert.deepEqual(entry.checklistItems, ['pan', 'lechuga']);
+});
+
+test('shopping-date-cleanup-3: mañana no entra como item', () => {
+  const text = 'mañana comprar pan';
+  const radar = buildHeuristicRadarResult(text);
+  assert.ok(radar.type === 'task' || radar.type === 'shopping_list');
+  assert.equal(radar.date_text, 'mañana');
+  assert.ok(!radar.checklist_items.includes('mañana'));
+  assert.ok(!radar.checklist_items.includes('manana'));
+
+  const entry = localParse(text);
+  assert.ok(entry.type === 'task' || entry.type === 'shopping_list');
+  assert.equal(entry.date, '2026-06-13');
+  assert.ok(!entry.checklistItems?.includes('mañana'));
+  assert.ok(!entry.checklistItems?.includes('manana'));
+});
+
+test('shopping-date-cleanup-4: lista simple de compras sigue igual', () => {
+  const text = 'comprar pan leche bebida';
+  const radar = buildHeuristicRadarResult(text);
+  assert.equal(radar.type, 'shopping_list');
+  assert.deepEqual(radar.checklist_items, ['pan', 'leche', 'bebida']);
+
+  const entry = localParse(text);
+  assert.equal(entry.type, 'shopping_list');
+  assert.deepEqual(entry.checklistItems, ['pan', 'leche', 'bebida']);
+});
+
+test('local-date-1: fecha explícita día mes año tiene prioridad sobre relativos', () => {
+  const entry = localParse('21 de junio 2026, estreno la casa del dragón');
+  assert.equal(entry.date, '2026-06-21');
+});
+
+test('local-date-2: día de semana no pisa fecha explícita completa', () => {
+  const entry = localParse('domingo 21 de junio 2026 estreno la casa del dragón');
+  assert.equal(entry.date, '2026-06-21');
+});
+
+test('local-date-3: mañana sigue resolviendo contra fecha base fija', () => {
+  const entry = localParse('mañana llevar alimentos');
+  assert.equal(entry.date, '2026-06-13');
+});
+
+test('local-date-4: día de semana sigue resolviendo contra fecha base fija', () => {
+  const entry = localParse('domingo llevar alimentos');
+  assert.equal(entry.date, '2026-06-14');
+});
+
 test('local-5: ideas para conectar Gmail Notion GitHub con Liev → note', () => {
   const entry = localParse('ideas para conectar Gmail Notion GitHub con Liev');
   assert.equal(entry.type, 'note');

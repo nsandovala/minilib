@@ -19,6 +19,17 @@ function normalizeText(text: string): string {
 }
 
 function inferDateText(text: string): string | null {
+  const isoMatch = text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (isoMatch) return isoMatch[1];
+
+  const explicitMatch = text.match(
+    /\b\d{1,2}\s+(?:de\s+)?(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|sept|octubre|nov|noviembre|dic|diciembre)(?:\s+(?:de\s+)?\d{4})?\b/i,
+  );
+  if (explicitMatch) return explicitMatch[0].replace(/\s+/g, ' ').trim().toLowerCase();
+
+  const slashMatch = text.match(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/);
+  if (slashMatch) return slashMatch[0];
+
   const match = text.match(/\b(hoy|mañana|manana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/i);
   return match?.[1]?.toLowerCase() ?? null;
 }

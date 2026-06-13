@@ -100,30 +100,19 @@ function getNextDayOfWeek(dayIndex: number, baseDate: Date): string {
 function resolveDate(text: string, baseDate: Date): string | null {
   const normalized = toMatchText(text);
 
-  if (/\bhoy\b/.test(normalized)) return formatLocalDateKey(baseDate);
-  if (/\bmanana\b/.test(normalized)) {
-    const tomorrow = new Date(baseDate);
-    tomorrow.setDate(baseDate.getDate() + 1);
-    return formatLocalDateKey(tomorrow);
-  }
-
-  const dayNameMatch = normalized.match(
-    /\b(?:el\s+)?(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/,
-  );
-  if (dayNameMatch) {
-    const dayIndex = DAY_MAP[dayNameMatch[1]];
-    if (dayIndex !== undefined) return getNextDayOfWeek(dayIndex, baseDate);
-  }
+  const isoMatch = normalized.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (isoMatch) return isoMatch[1];
 
   const longDateMatch = normalized.match(
-    /\b(\d{1,2})\s+(?:de\s+)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|sept|octubre|nov|noviembre|dic|diciembre)\b/,
+    /\b(\d{1,2})\s+(?:de\s+)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|sept|octubre|nov|noviembre|dic|diciembre)(?:\s+(?:de\s+)?(\d{4}))?\b/,
   );
   if (longDateMatch) {
     const day = Number.parseInt(longDateMatch[1], 10);
     const month = MONTH_MAP[longDateMatch[2]];
     if (month === undefined) return null;
-    const candidate = new Date(baseDate.getFullYear(), month, day, 12);
-    if (candidate < baseDate) candidate.setFullYear(candidate.getFullYear() + 1);
+    const year = longDateMatch[3] ? Number.parseInt(longDateMatch[3], 10) : baseDate.getFullYear();
+    const candidate = new Date(year, month, day, 12);
+    if (!longDateMatch[3] && candidate < baseDate) candidate.setFullYear(candidate.getFullYear() + 1);
     return formatLocalDateKey(candidate);
   }
 
@@ -139,8 +128,22 @@ function resolveDate(text: string, baseDate: Date): string | null {
     return formatLocalDateKey(candidate);
   }
 
-  const isoMatch = normalized.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-  return isoMatch?.[1] ?? null;
+  if (/\bhoy\b/.test(normalized)) return formatLocalDateKey(baseDate);
+  if (/\bmanana\b/.test(normalized)) {
+    const tomorrow = new Date(baseDate);
+    tomorrow.setDate(baseDate.getDate() + 1);
+    return formatLocalDateKey(tomorrow);
+  }
+
+  const dayNameMatch = normalized.match(
+    /\b(?:el\s+)?(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/,
+  );
+  if (dayNameMatch) {
+    const dayIndex = DAY_MAP[dayNameMatch[1]];
+    if (dayIndex !== undefined) return getNextDayOfWeek(dayIndex, baseDate);
+  }
+
+  return null;
 }
 
 function resolveCount(text: string): number | null {

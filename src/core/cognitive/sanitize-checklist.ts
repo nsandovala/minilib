@@ -32,8 +32,41 @@ export const FORBIDDEN_ITEM_WORDS = new Set([
   'ir', 'voy', 'vas', 'va', 'vamos', 'van', 'fui', 'fue', 'ire', 'iré', 'ira', 'irá',
 ]);
 
+const MONTH_WORDS = new Set([
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'sept', 'octubre', 'nov', 'noviembre', 'dic', 'diciembre',
+]);
+
+const MONTH_PATTERN = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|sept|octubre|nov|noviembre|dic|diciembre';
+const WEEKDAY_PATTERN = 'lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo';
+
 function normalizeText(text: string): string {
   return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function hasExplicitDate(rawText: string): boolean {
+  const dayMonth = new RegExp(`\\b\\d{1,2}\\s+(?:de\\s+)?(?:${MONTH_PATTERN})(?:\\s+(?:de\\s+)?\\d{4})?\\b`, 'i');
+  return /\b\d{4}-\d{2}-\d{2}\b/.test(rawText) || dayMonth.test(rawText);
+}
+
+function isDateFragmentItem(item: string, rawText: string): boolean {
+  if (!hasExplicitDate(rawText)) return false;
+  const lower = normalizeText(item);
+  if (MONTH_WORDS.has(lower)) return true;
+  if (!/^\d{1,2}$/.test(lower)) return false;
+  const dayMonth = new RegExp(`\\b${lower}\\s+(?:de\\s+)?(?:${MONTH_PATTERN})(?:\\s+(?:de\\s+)?\\d{4})?\\b`, 'i');
+  return dayMonth.test(rawText);
+}
+
+function stripDateSignals(text: string): string {
+  return text
+    .replace(new RegExp(`\\b(?:${WEEKDAY_PATTERN})\\s+\\d{1,2}\\s+(?:de\\s+)?(?:${MONTH_PATTERN})(?:\\s+(?:de\\s+)?\\d{4})?\\b`, 'gi'), ' ')
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ')
+    .replace(new RegExp(`\\b\\d{1,2}\\s+(?:de\\s+)?(?:${MONTH_PATTERN})(?:\\s+(?:de\\s+)?\\d{4})?\\b`, 'gi'), ' ')
+    .replace(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g, ' ')
+    .replace(new RegExp(`\\b(?:hoy|mañana|manana|${WEEKDAY_PATTERN})\\b`, 'gi'), ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function stripTotal(text: string): { text: string; possibleTotal: number | null } {
@@ -84,6 +117,7 @@ export function sanitizeChecklistItems(
     const lower = normalizeText(item);
 
     if (!lower || lower.length < 2) continue;
+    if (isDateFragmentItem(item, rawText)) continue;
     if (FORBIDDEN_ITEM_WORDS.has(lower) || lower === storeType) continue;
     if (/^total\b/i.test(lower) || /\btotal\s+\d/i.test(lower)) continue;
     if (DATE_WORDS.has(lower)) continue;
@@ -104,8 +138,7 @@ export function sanitizeChecklistItems(
     possibleTotal = withoutTotal.possibleTotal;
   }
 
-  const cleanedText = withoutTotal.text
-    .replace(/\b(?:hoy|mañana|manana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/gi, ' ')
+  const cleanedText = stripDateSignals(withoutTotal.text)
     .replace(/\b(?:comprar|compra|compras|lista|en|el|la|los|las|de|del|al|para|por|supermercado|super|minimarket|farmacia|feria|mercado|botiller[ií]a|mall\s*chino|mall|panader[ií]a|carnicer[ií]a|verduler[ií]a)\b/gi, ' ')
     .replace(/\b\d{1,2}:\d{2}\b/g, ' ')
     .replace(/\s+/g, ' ')

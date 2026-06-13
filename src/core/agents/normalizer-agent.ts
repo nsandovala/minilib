@@ -244,6 +244,11 @@ export function normalizeEntry(tokens: ExtractedTokens, source?: string): Parsed
   const title = shouldPreferCalendarTitle
     ? calendarResult.title!
     : buildTitle(tokens, type, calendarMetadata);
+  const date = tokens.dateSource === 'explicit'
+    ? tokens.date ?? undefined
+    : calendarResult?.matched
+      ? calendarResult.date ?? undefined
+      : tokens.date ?? undefined;
   const tags = Array.from(new Set([...buildTags(tokens.rawText, type), ...tokens.detectedTags]));
   // Only attach shopping metadata when the resolved type is actually a list type.
   // Attaching it to 'note' or 'task' entries causes them to leak into /purchases.
@@ -269,7 +274,7 @@ export function normalizeEntry(tokens: ExtractedTokens, source?: string): Parsed
     text: tokens.rawText,
     type,
     title,
-    date: calendarResult?.matched ? calendarResult.date ?? undefined : tokens.date ?? undefined,
+    date,
     time: calendarResult?.matched ? calendarResult.time ?? undefined : tokens.time ?? undefined,
     tags,
     amount: type === 'payment' ? tokens.amount ?? undefined : undefined,

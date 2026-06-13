@@ -48,8 +48,22 @@ const INTRO_PATTERNS = [
   /\blista\s+de\b/gi,
 ];
 
+const MONTH_PATTERN = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|sept|octubre|nov|noviembre|dic|diciembre';
+const WEEKDAY_PATTERN = 'lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo';
+
+function stripShoppingDateSignals(text: string): string {
+  return text
+    .replace(new RegExp(`\\b(?:${WEEKDAY_PATTERN})\\s+\\d{1,2}\\s+(?:de\\s+)?(?:${MONTH_PATTERN})(?:\\s+(?:de\\s+)?\\d{4})?\\b`, 'gi'), ' ')
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ')
+    .replace(new RegExp(`\\b\\d{1,2}\\s+(?:de\\s+)?(?:${MONTH_PATTERN})(?:\\s+(?:de\\s+)?\\d{4})?\\b`, 'gi'), ' ')
+    .replace(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g, ' ')
+    .replace(new RegExp(`\\b(?:hoy|mañana|manana|${WEEKDAY_PATTERN})\\b`, 'gi'), ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function cleanShoppingIntro(text: string): string {
-  let cleaned = text;
+  let cleaned = stripShoppingDateSignals(text);
   for (const pattern of INTRO_PATTERNS) {
     cleaned = cleaned.replace(pattern, ' ');
   }
