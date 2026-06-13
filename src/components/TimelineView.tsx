@@ -337,6 +337,97 @@ function DetailLine({ label, value }: { label: string; value: string }) {
   );
 }
 
+const NEXT_STEP_NOISE_WORDS = new Set([
+  'a',
+  'al',
+  'de',
+  'del',
+  'el',
+  'en',
+  'hoy',
+  'la',
+  'las',
+  'lo',
+  'los',
+  'marcar',
+  'para',
+  'por',
+  'que',
+  'revisar',
+  'revisarlo',
+  'si',
+  'un',
+  'una',
+  'como',
+  'cuando',
+  'resuelvas',
+  'ya',
+]);
+
+function normalizeDetailText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[.,;:!?¡¿()[\]{}'"`´“”‘’\-_\/\\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeDetailToken(value: string): string {
+  if (/^pag/.test(value)) return 'pago';
+  if (/^compr/.test(value)) return 'compra';
+  return value;
+}
+
+function getMeaningfulDetailTokens(value: string): string[] {
+  return normalizeDetailText(value)
+    .split(' ')
+    .map(normalizeDetailToken)
+    .filter((token) => token && !NEXT_STEP_NOISE_WORDS.has(token));
+}
+
+function readComparableMetadataText(entry: TimelineEntry): string[] {
+  const metadata = entry.metadata;
+  if (!metadata || typeof metadata !== 'object') return [];
+
+  return ['summary', 'originalText', 'body']
+    .map((key) => (metadata as Record<string, unknown>)[key])
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+}
+
+function isSimilarDetailText(nextStep: string, reference: string): boolean {
+  const normalizedNext = normalizeDetailText(nextStep);
+  const normalizedReference = normalizeDetailText(reference);
+
+  if (!normalizedNext || !normalizedReference) return false;
+  if (normalizedNext === normalizedReference) return true;
+  if (normalizedReference.length > 8 && normalizedReference.includes(normalizedNext)) return true;
+  if (normalizedNext.length > 8 && normalizedNext.includes(normalizedReference)) return true;
+
+  const nextTokens = getMeaningfulDetailTokens(nextStep);
+  const referenceTokens = new Set(getMeaningfulDetailTokens(reference));
+
+  if (nextTokens.length === 0) return true;
+  const overlap = nextTokens.filter((token) => referenceTokens.has(token)).length;
+
+  if (nextTokens.length === 1) return overlap === 1;
+  return overlap / nextTokens.length >= 0.75;
+}
+
+function getVisibleNextStep(entry: TimelineEntry, nextStep: string, originalText: string): string {
+  if (!nextStep) return '';
+
+  const references = [
+    entry.title,
+    entry.text,
+    originalText,
+    ...readComparableMetadataText(entry),
+  ].filter((value) => value.trim().length > 0);
+
+  return references.some((reference) => isSimilarDetailText(nextStep, reference)) ? '' : nextStep;
+}
+
 function CalendarDetail({ entry }: { entry: TimelineEntry }) {
   const calendar = getEntryCalendarMetadata(entry);
   if (!calendar) return null;
@@ -721,6 +812,15 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
   const showCalmExplanation = shouldShowCalmExplanation(entry, displayContext);
   const showCorrectionHint = shouldShowCorrectionHint(entry, displayContext);
   const showOriginalText = shouldShowOriginalText(entry, displayContext);
+  const paymentNextStep = isPayment
+    ? getFinancialDirection(entry) === 'income'
+      ? 'dejarlo registrado si ya entró'
+      : 'marcar como pagado cuando lo resuelvas'
+    : '';
+  const visiblePaymentNextStep = isPayment ? getVisibleNextStep(entry, paymentNextStep, detailOriginal) : '';
+  const visibleDefaultNextStep = !isShoppingList && !isCalendar && !isPayment && !isPetOrHealth
+    ? getVisibleNextStep(entry, getEntryNextStep(entry), detailOriginal)
+    : '';
 
   return (
     <div
@@ -1117,7 +1217,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                       <DetailLine label="Cuándo" value={whenLabel} />
                       <DetailLine label="Tipo" value={`${getFinancialDirection(entry) === 'income' ? 'ingreso' : 'egreso'} / ${getFinancialCategory(entry)}`} />
                       <DetailLine label="Estado" value={statusText} />
-                      <DetailLine label="Próximo paso" value={getFinancialDirection(entry) === 'income' ? 'dejarlo registrado si ya entró' : 'marcar como pagado cuando lo resuelvas'} />
+                      <DetailLine label="Próximo paso" value={visiblePaymentNextStep} />
                       {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
                     </>
                   ) : isPetOrHealth ? (
@@ -1132,7 +1232,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                   ) : (
                     <>
                       {showCalmExplanation && calmExplanation && <DetailLine label="Liev" value={calmExplanation} />}
-                      <DetailLine label="Próximo paso" value={getEntryNextStep(entry)} />
+                      <DetailLine label="Próximo paso" value={visibleDefaultNextStep} />
                       <DetailLine label="Cuándo" value={whenLabel} />
                       {showOriginalText && <DetailLine label="Detalle original" value={detailOriginal} />}
                     </>
