@@ -233,7 +233,7 @@ export function normalizeEntry(tokens: ExtractedTokens, source?: string): Parsed
   const type = classification.confidence >= threshold ? classification.type : 'note';
 
   const calendarResult = type !== 'payment'
-    ? parseCalendarEventInput(tokens.rawText)
+    ? parseCalendarEventInput(tokens.rawText, tokens.baseDate)
     : null;
   const calendarMetadata = calendarResult?.metadata ?? null;
   const shouldPreferCalendarTitle =

@@ -747,8 +747,10 @@ test('mínimo-5: ideas para conectar Gmail Notion GitHub con Liev → note', () 
 import { parseTokens } from '../src/core/agents/parser-agent.ts';
 import { normalizeEntry } from '../src/core/agents/normalizer-agent.ts';
 
-function localParse(text) {
-  const tokens = parseTokens(text);
+const LOCAL_PARSE_BASE_DATE = new Date('2026-06-12T12:00:00-04:00');
+
+function localParse(text, baseDate = LOCAL_PARSE_BASE_DATE) {
+  const tokens = parseTokens(text, { baseDate });
   return normalizeEntry(tokens);
 }
 
