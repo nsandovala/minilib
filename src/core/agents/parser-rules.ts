@@ -16,14 +16,15 @@ export function shouldBuildShoppingList(params: {
   explicitListIntent: boolean;
   hasStoreKeyword: boolean;
   hasKnownCategory: boolean;
+  hasShoppingIntent?: boolean;
 }): boolean {
-  const { itemCount, explicitListIntent, hasStoreKeyword, hasKnownCategory } = params;
+  const { itemCount, explicitListIntent, hasStoreKeyword, hasKnownCategory, hasShoppingIntent } = params;
   if (itemCount < 1) return false;
   if (itemCount < 2 && !explicitListIntent) return false;
   if (itemCount < 2 && !hasStoreKeyword && !hasKnownCategory) return false;
   // Require at least one concrete shopping signal to avoid false positives
   // with conceptual lists like "Ideas, mascotas, salud, pendientes"
-  if (!hasStoreKeyword && !hasKnownCategory) return false;
+  if (!hasStoreKeyword && !hasKnownCategory && !hasShoppingIntent) return false;
   return true;
 }
 

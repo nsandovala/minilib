@@ -29,16 +29,18 @@ const TYPE_ACCENT: Record<string, string> = {
 };
 
 export default function NextBestAction({ entries }: NextBestActionProps) {
-  const top = useMemo(() =>
-    entries
+  const top = useMemo(() => {
+    const scored = entries
       .filter((e) => !e.done)
       .map((e) => ({ entry: e, score: computePriorityScore(e) }))
-      .filter(({ score }) => score >= 60)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3)
-      .map(({ entry }) => entry),
-    [entries],
-  );
+      .sort((a, b) => b.score - a.score);
+
+    const urgent = scored.filter(({ score }) => score >= 60);
+    const remaining = scored.filter(({ score }) => score < 60);
+    const selected = [...urgent, ...remaining];
+
+    return selected.slice(0, 3).map(({ entry }) => entry);
+  }, [entries]);
 
   const scrollToEntry = useCallback((localId: string) => {
     const el = document.getElementById(`timeline-entry-${localId}`);
@@ -63,7 +65,7 @@ export default function NextBestAction({ entries }: NextBestActionProps) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
         {top.length === 0 && (
           <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', padding: '8px 4px' }}>
-            Sin acciones urgentes
+            Sin prioridades pendientes
           </p>
         )}
         {top.map((entry) => {

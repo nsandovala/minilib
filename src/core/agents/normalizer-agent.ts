@@ -32,7 +32,7 @@ const TYPE_PATTERNS: Record<EntryType, RegExp[]> = {
     /\b(recordar|recordatorio|acordarse|no\s+olvidar|alerta|avisar)\b/i,
   ],
   task: [
-    /\b(comprar|llevar|sacar|hacer|limpiar|lavar|cocinar|preparar|arreglar|revisar|cambiar|ir\s+a|pasar\s+por|buscar|entregar|devolver|agendar)\b/i,
+    /\b(comprar|llevar|sacar|hacer|limpiar|lavar|cocinar|preparar|arreglar|revisar|cambiar|ir\s+a|pasar\s+por|buscar|entregar|devolver|agendar|realizar|imprimir|contactar|avisar|enviar|recoger)\b/i,
   ],
   note: [],
   shopping_list: [],

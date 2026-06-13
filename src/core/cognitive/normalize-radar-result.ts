@@ -88,7 +88,7 @@ function inferType(text: string, candidateType: unknown, items: string[]): Contr
   if (hasPetAction(text)) return 'pet';
   if (hasHealthIntent(text)) return /\b(hora|cita|consulta|medico|doctor|dentista|kine)\b/.test(lower) ? 'appointment' : 'health';
   if (/\b(reunion|cumpleanos|cumpleaños|cita|hora|agenda|agendar)\b/.test(lower)) return 'calendar';
-  if (/\b(buscar|hacer|llevar|sacar|revisar|comprar)\b/.test(lower)) return 'task';
+  if (/\b(buscar|hacer|llevar|sacar|revisar|comprar|realizar|imprimir|contactar|enviar|recoger)\b/.test(lower)) return 'task';
   if (typeof candidateType === 'string' && RadarCardSchema.shape.type.safeParse(candidateType).success) {
     return candidateType as ContractEntryType;
   }

@@ -1,6 +1,6 @@
 import type { ShoppingItem, ShoppingProgress } from '@/types';
 import { normalizeCLP } from '../../lib/money.ts';
-import { hasExplicitListIntent, shouldBuildShoppingList, hasProjectIntent } from './parser-rules.ts';
+import { hasExplicitListIntent, shouldBuildShoppingList, hasProjectIntent, hasShoppingIntent } from './parser-rules.ts';
 
 export interface ShoppingListBuildResult {
   listKind: 'shopping';
@@ -28,6 +28,8 @@ const INTRO_PATTERNS = [
   /\btraer\s+(?:de\s+)?(?:el\s+)?(?:super(?:mercado)?|mercado)\b/gi,
   /\bir\s+a\s+(?:comprar|el\s+super|el\s+mercado)\b/gi,
   /\bcomprar\b/gi,
+  // Store at end of list: "pan leche en minimarket" → "pan leche"
+  /\s+en\s+(?:el\s+|la\s+)?(?:super(?:mercado)?|mercado|minimarket|feria|farmacia|botiller[ií]a|mall\s*chino|mall|tabaquer[ií]a|ferreter[ií]a|verduler[ií]a|carnicer[ií]a|panader[ií]a|almac[eé]n|despensa)\b/gi,
   /\bcompras\b/gi,
   /\bsupermercado\b/gi,
   /\bminimarket\b/gi,
@@ -254,6 +256,18 @@ const ITEM_CATEGORY_MAP: Record<string, string> = {
   peras: 'frutas/verduras',
   manzanas: 'frutas/verduras',
   platanos: 'frutas/verduras',
+
+  // carnes
+  carne: 'carnes',
+  carnes: 'carnes',
+  pollo: 'carnes',
+  vacuno: 'carnes',
+  cerdo: 'carnes',
+  pescado: 'carnes',
+  salmón: 'carnes',
+  salmon: 'carnes',
+  caldo: 'carnes',
+  caldos: 'carnes',
 
   // panadería
   pan: 'panadería',
@@ -494,6 +508,7 @@ export function buildShoppingList(input: string): ShoppingListBuildResult | null
     explicitListIntent,
     hasStoreKeyword,
     hasKnownCategory,
+    hasShoppingIntent: hasShoppingIntent(raw),
   })) return null;
 
   const storeType = storeFromRaw !== 'otro' ? storeFromRaw : detectStoreType(cleaned);

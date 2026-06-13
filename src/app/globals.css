@@ -294,6 +294,338 @@
     flex-shrink: 0;
   }
 
+  .note-reader-overlay {
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 50% -10%, rgba(201, 168, 130, 0.12), transparent 34%),
+      linear-gradient(180deg, #1a140e 0%, #100d09 48%, #17110c 100%);
+  }
+
+  .note-reader-overlay::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.022;
+    background-image:
+      linear-gradient(rgba(255, 244, 224, 0.95) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 244, 224, 0.95) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .note-reader-overlay::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(90deg, rgba(255, 248, 240, 0.018), transparent 22%, transparent 78%, rgba(255, 248, 240, 0.016));
+  }
+
+  html[data-theme="light"] .note-reader-overlay {
+    background:
+      radial-gradient(circle at 50% -12%, rgba(255, 255, 255, 0.88), transparent 32%),
+      linear-gradient(180deg, #fffaf0 0%, #f6ecdc 54%, #efe1ca 100%);
+  }
+
+  html[data-theme="light"] .note-reader-overlay::before {
+    opacity: 0.026;
+    background-image:
+      linear-gradient(rgba(126, 91, 47, 0.9) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(126, 91, 47, 0.9) 1px, transparent 1px);
+  }
+
+  html[data-theme="light"] .note-reader-overlay::after {
+    background:
+      linear-gradient(90deg, rgba(126, 91, 47, 0.035), transparent 24%, transparent 76%, rgba(126, 91, 47, 0.025));
+  }
+
+  .note-reader-topbar,
+  .note-reader-scroll,
+  .note-reader-floating-actions {
+    position: relative;
+    z-index: 1;
+  }
+
+  .note-reader-topbar {
+    gap: 14px;
+    padding: max(30px, env(safe-area-inset-top)) 20px 14px;
+  }
+
+  .note-reader-back {
+    flex: 0 0 auto;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 8px 0;
+    transition: color 160ms ease;
+  }
+
+  .note-reader-back:hover {
+    color: var(--text-primary);
+  }
+
+  .note-reader-kicker {
+    min-width: 0;
+    display: grid;
+    justify-items: center;
+    gap: 3px;
+    text-align: center;
+  }
+
+  .note-reader-type {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+
+  .note-reader-meta {
+    max-width: min(52vw, 520px);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .note-reader-topbar-spacer {
+    flex: 0 0 72px;
+  }
+
+  .note-reader-scroll {
+    flex: 1;
+    overflow: auto;
+    padding: 10px calc(74px + env(safe-area-inset-right, 0px)) 24px 20px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .note-reader-sheet {
+    width: min(100%, 700px);
+    min-height: 100%;
+    margin: 0 auto;
+    padding: 22px 0 32px;
+  }
+
+  .note-reader-title {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.18;
+    word-break: break-word;
+  }
+
+  .note-reader-rule {
+    width: 100%;
+    height: 1px;
+    margin: 18px 0 22px;
+    background:
+      linear-gradient(90deg, var(--divider-strong), var(--divider), transparent);
+  }
+
+  .note-reader-body {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.82;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .note-reader-actions {
+    display: none;
+  }
+
+  .note-reader-floating-actions {
+    position: fixed;
+    right: calc(14px + env(safe-area-inset-right, 0px));
+    top: clamp(120px, 22vh, 180px);
+    z-index: 275;
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--divider);
+    border-radius: 999px;
+    background: rgba(16, 13, 9, 0.52);
+    box-shadow:
+      0 18px 44px rgba(0, 0, 0, 0.28),
+      inset 0 1px 0 rgba(255, 248, 240, 0.055);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    opacity: 0.82;
+    transition: opacity 160ms ease, background 160ms ease, border-color 160ms ease;
+  }
+
+  .note-reader-floating-actions:hover,
+  .note-reader-floating-actions:focus-within {
+    opacity: 1;
+    border-color: var(--divider-strong);
+  }
+
+  html[data-theme="light"] .note-reader-floating-actions {
+    background: rgba(255, 248, 236, 0.72);
+    box-shadow:
+      0 16px 36px rgba(116, 78, 31, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  }
+
+  .note-reader-floating-action {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    border: 1px solid var(--divider-strong);
+    border-radius: 50%;
+    background: rgba(255, 248, 240, 0.045);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+  }
+
+  .note-reader-floating-action:hover,
+  .note-reader-floating-action:focus-visible {
+    background: var(--bg-surface-hover);
+    border-color: var(--border-active);
+    outline: none;
+  }
+
+  .note-reader-floating-action:active {
+    transform: translateY(1px);
+  }
+
+  .note-reader-floating-action-primary {
+    border-color: rgba(201, 168, 130, 0.3);
+    background: rgba(201, 168, 130, 0.14);
+    color: var(--accent-primary);
+  }
+
+  .note-reader-floating-action[aria-pressed="true"] {
+    border-color: rgba(201, 168, 130, 0.34);
+    background: rgba(201, 168, 130, 0.12);
+    color: var(--accent-primary);
+  }
+
+  html[data-theme="light"] .note-reader-floating-action {
+    background: rgba(255, 253, 247, 0.72);
+  }
+
+  html[data-theme="light"] .note-reader-floating-action-primary {
+    background: rgba(184, 132, 63, 0.14);
+    color: #7f4f1e;
+  }
+
+  .note-reader-action-status {
+    position: absolute;
+    right: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    max-width: 120px;
+    padding: 6px 10px;
+    border: 1px solid var(--divider);
+    border-radius: 999px;
+    background: rgba(16, 13, 9, 0.72);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease;
+  }
+
+  .note-reader-action-status:not(:empty) {
+    opacity: 1;
+  }
+
+  html[data-theme="light"] .note-reader-action-status {
+    background: rgba(255, 253, 247, 0.88);
+  }
+
+  @media (min-width: 720px) {
+    .note-reader-topbar {
+      padding-inline: 28px;
+    }
+
+    .note-reader-scroll {
+      padding: 22px calc(88px + env(safe-area-inset-right, 0px)) 36px 32px;
+    }
+
+    .note-reader-sheet {
+      padding-top: 30px;
+    }
+
+    .note-reader-title {
+      font-size: 36px;
+      line-height: 1.14;
+    }
+
+    .note-reader-body {
+      font-size: 17px;
+      line-height: 1.86;
+    }
+
+    .note-reader-floating-actions {
+      top: clamp(136px, 20vh, 190px);
+    }
+  }
+
+  @media (min-width: 900px) {
+    .note-reader-scroll {
+      padding: 22px 32px 36px;
+    }
+
+    .note-reader-floating-actions {
+      right: max(24px, calc((100vw - 700px) / 2 - 76px));
+    }
+  }
+
+  @media (max-width: 420px) {
+    .note-reader-topbar {
+      align-items: flex-start;
+    }
+
+    .note-reader-kicker {
+      justify-items: end;
+      text-align: right;
+    }
+
+    .note-reader-meta {
+      max-width: 48vw;
+    }
+
+    .note-reader-topbar-spacer {
+      display: none;
+    }
+
+    .note-reader-title {
+      font-size: 27px;
+    }
+
+    .note-reader-floating-actions {
+      right: calc(10px + env(safe-area-inset-right, 0px));
+      gap: 6px;
+      padding: 6px;
+      opacity: 0.76;
+    }
+
+    .note-reader-floating-action {
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+    }
+  }
+
   .chip {
     display: inline-flex;
     align-items: center;

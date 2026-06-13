@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TimelineEntry, ChecklistItem, EntryType, ShoppingMetadata } from '@/types';
-import { toggleEntryDone, deleteEntry, updateEntry, reparseAndUpdateEntry, toggleShoppingItem } from '@/db/entries';
+import { toggleEntryDone, deleteEntry, reparseAndUpdateEntry, toggleShoppingItem } from '@/db/entries';
 import { toggleChecklistItem } from '@/db/checklist';
 import { db } from '@/db';
 import { recordBelongsToActiveUser } from '@/lib/local-user';
@@ -427,6 +427,17 @@ export default function TimelineView({ entries, onRefresh, currentSurface }: Tim
   const [readingNote, setReadingNote] = useState<TimelineEntry | null>(null);
   const [editingNote, setEditingNote] = useState<TimelineEntry | null>(null);
 
+  const handleToggleReadingNotePin = (note: TimelineEntry) => {
+    const next = toggleEntryPinned(note);
+    setPinnedIds((prev) => {
+      const updated = new Set(prev);
+      if (next) updated.add(note.localId);
+      else updated.delete(note.localId);
+      return updated;
+    });
+    onRefresh();
+  };
+
   if (timeline.isEmpty) {
     return (
       <div className="empty-state" style={{ padding: '40px 24px' }}>
@@ -473,6 +484,8 @@ export default function TimelineView({ entries, onRefresh, currentSurface }: Tim
           }}
           onClose={() => setReadingNote(null)}
           onRefresh={onRefresh}
+          isPinned={pinnedIds.has(readingNote.localId)}
+          onTogglePinned={handleToggleReadingNotePin}
         />
       )}
 

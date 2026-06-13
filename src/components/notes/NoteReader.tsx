@@ -1,9 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import type { TimelineEntry, EntryType } from '@/types';
-import { reclassifyEntry } from '@/db/entries';
-import { getAgentForType } from '@/core/card-agents';
+import { useMemo, useState } from 'react';
+import type { TimelineEntry } from '@/types';
 
 interface NoteReaderProps {
   note: TimelineEntry;
@@ -11,368 +9,271 @@ interface NoteReaderProps {
   onDelete: (id: number) => void;
   onClose: () => void;
   onRefresh?: () => void;
+  isPinned?: boolean;
+  onTogglePinned?: (note: TimelineEntry) => void;
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  note: 'Nota',
-  task: 'Tarea',
-  payment: 'Pago',
-  shopping_list: 'Lista de compras',
-  health: 'Salud',
-  appointment: 'Cita médica',
-  pet: 'Mascota',
-  reminder: 'Recordatorio',
-};
+const dateFormatter = new Intl.DateTimeFormat('es-CL', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
 
-const TYPE_OPTIONS: EntryType[] = ['note', 'task', 'payment', 'shopping_list', 'health', 'appointment', 'pet', 'reminder'];
+const timestampFormatter = new Intl.DateTimeFormat('es-CL', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
-export default function NoteReader({ note, onEdit, onDelete, onClose, onRefresh }: NoteReaderProps) {
-  const [showReclassify, setShowReclassify] = useState(false);
-  const [selectedType, setSelectedType] = useState<EntryType>(note.type);
-  const [editAmount, setEditAmount] = useState<string>(note.amount?.toString() ?? '');
-  const [editDate, setEditDate] = useState<string>(note.date ?? '');
-  const [editTime, setEditTime] = useState<string>(note.time ?? '');
-  const [saving, setSaving] = useState(false);
+const amountFormatter = new Intl.NumberFormat('es-CL', {
+  style: 'currency',
+  currency: 'CLP',
+  maximumFractionDigits: 0,
+});
 
-  const handleDelete = () => {
-    if (window.confirm('¿Eliminar esta nota?')) {
-      onDelete(note.id!);
-      onClose();
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDateValue(value: string): string {
+  const isoDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (isoDate) {
+    const [, year, month, day] = isoDate;
+    return dateFormatter.format(new Date(Number(year), Number(month) - 1, Number(day)));
+  }
+
+  const date = toDate(value);
+  return date ? dateFormatter.format(date) : value;
+}
+
+function formatTimestamp(value: Date | string | null | undefined): string | null {
+  const date = toDate(value);
+  return date ? timestampFormatter.format(date) : null;
+}
+
+function hasMeaningfulUpdate(createdAt: Date | string, updatedAt?: Date | string | null): boolean {
+  const created = toDate(createdAt);
+  const updated = toDate(updatedAt);
+
+  if (!created || !updated) return false;
+  return Math.abs(updated.getTime() - created.getTime()) > 60_000;
+}
+
+function copyWithFallback(text: string): boolean {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.top = '0';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  try {
+    return document.execCommand('copy');
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
+function EditIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 20l4.6-1 9.6-9.6a2.1 2.1 0 0 0-3-3L5.6 16 4 20Z" />
+      <path d="M13.6 7.4l3 3" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="8" y="8" width="11" height="11" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="M8.7 10.7l6.6-4.4" />
+      <path d="M8.7 13.3l6.6 4.4" />
+    </svg>
+  );
+}
+
+function StarIcon({ filled = false }: { filled?: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 17.3 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+    </svg>
+  );
+}
+
+export default function NoteReader({ note, onEdit, onClose, isPinned = false, onTogglePinned }: NoteReaderProps) {
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [shareState, setShareState] = useState<'idle' | 'shared' | 'copied' | 'failed'>('idle');
+
+  const noteText = useMemo(
+    () => [note.title, note.text].filter(Boolean).join('\n\n'),
+    [note.text, note.title],
+  );
+
+  const metadata = useMemo(() => {
+    const items: string[] = [];
+
+    if (note.date) items.push(formatDateValue(note.date));
+    if (note.time) items.push(note.time);
+    if (note.amount !== null && note.amount !== undefined) items.push(amountFormatter.format(note.amount));
+
+    const createdAt = formatTimestamp(note.createdAt);
+    if (createdAt) items.push(`Creada ${createdAt}`);
+
+    if (hasMeaningfulUpdate(note.createdAt, note.updatedAt)) {
+      const updatedAt = formatTimestamp(note.updatedAt);
+      if (updatedAt) items.push(`Actualizada ${updatedAt}`);
     }
-  };
+
+    return items;
+  }, [note.amount, note.createdAt, note.date, note.time, note.updatedAt]);
+
+  if (note.type !== 'note') return null;
 
   const handleEdit = () => {
     onEdit(note);
   };
 
-  const handleReclassify = async () => {
-    if (saving) return;
-    setSaving(true);
-
+  const handleCopy = async () => {
     try {
-      const changes: Parameters<typeof reclassifyEntry>[1] = {
-        type: selectedType !== note.type ? selectedType : undefined,
-        amount: editAmount !== (note.amount?.toString() ?? '')
-          ? editAmount ? Number(editAmount) : null
-          : undefined,
-        date: editDate !== (note.date ?? '')
-          ? editDate || null
-          : undefined,
-        time: editTime !== (note.time ?? '')
-          ? editTime || null
-          : undefined,
-      };
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(noteText);
+      } else if (!copyWithFallback(noteText)) {
+        throw new Error('Copy fallback failed');
+      }
 
-      await reclassifyEntry(note.id!, changes);
-      setShowReclassify(false);
-      onRefresh?.();
-      onClose();
-    } catch (err) {
-      console.error('Failed to reclassify:', err);
+      setCopyState('copied');
+    } catch {
+      setCopyState('failed');
     } finally {
-      setSaving(false);
+      window.setTimeout(() => setCopyState('idle'), 1800);
     }
   };
 
-  const agent = getAgentForType(note.type);
-  const allowedTargets = agent?.correction.allowedTargetTypes ?? [];
-  const canReclassify = allowedTargets.length > 0;
+  const handleShare = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: note.title || 'Nota',
+          text: noteText,
+        });
+        setShareState('shared');
+      } else {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(noteText);
+        } else if (!copyWithFallback(noteText)) {
+          throw new Error('Share fallback copy failed');
+        }
+        setShareState('copied');
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      setShareState('failed');
+    } finally {
+      window.setTimeout(() => setShareState('idle'), 1800);
+    }
+  };
+
+  const handleTogglePinned = () => {
+    onTogglePinned?.(note);
+  };
+
+  const copyLabel = copyState === 'copied' ? 'Copiado' : copyState === 'failed' ? 'No se copió' : 'Copiar';
+  const shareLabel = shareState === 'shared'
+    ? 'Compartido'
+    : shareState === 'copied'
+    ? 'Copiado'
+    : shareState === 'failed'
+    ? 'No se compartió'
+    : 'Compartir';
+  const statusLabel = copyState !== 'idle' ? copyLabel : shareState !== 'idle' ? shareLabel : '';
 
   return (
-    <div className="overlay" style={{ zIndex: 250 }}>
-      <div className="overlay-topbar">
-        <button type="button" className="btn-ghost tap-target" onClick={onClose}>
-          ← Cerrar
+    <div className="overlay note-reader-overlay" style={{ zIndex: 250 }}>
+      <header className="overlay-topbar note-reader-topbar">
+        <button type="button" className="note-reader-back tap-target" onClick={onClose}>
+          ← Volver
         </button>
-        <span style={{ fontSize: '13px', color: 'var(--text-tertiary)', fontWeight: 500 }}>
-          {TYPE_LABELS[note.type] ?? 'Entrada'}
-        </span>
-        <div style={{ width: 80 }} />
-      </div>
 
-      <div
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: '0 24px 24px',
-          WebkitOverflowScrolling: 'touch',
-        }}
-      >
-        <h1
-          style={{
-            fontSize: '22px',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            letterSpacing: '-0.02em',
-            lineHeight: 1.3,
-            margin: '0 0 16px',
-            wordBreak: 'break-word',
-          }}
-        >
-          {note.title || 'Sin título'}
-        </h1>
-
-        {/* Metadata display */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-          {note.date && (
-            <span
-              className="chip"
-              style={{ fontSize: '11px', color: 'var(--text-muted)' }}
-            >
-              {note.date}
-            </span>
-          )}
-          {note.time && (
-            <span
-              className="chip"
-              style={{ fontSize: '11px', color: 'var(--text-muted)' }}
-            >
-              {note.time}
-            </span>
-          )}
-          {note.amount !== null && note.amount !== undefined && (
-            <span
-              className="chip"
-              style={{ fontSize: '11px', color: '#c9a882', fontWeight: 500 }}
-            >
-              ${note.amount.toLocaleString('es-CL')}
-            </span>
+        <div className="note-reader-kicker" aria-label="Metadata de la nota">
+          <span className="note-reader-type">Nota</span>
+          {metadata.length > 0 && (
+            <span className="note-reader-meta">{metadata.join(' · ')}</span>
           )}
         </div>
 
-        <p
-          style={{
-            fontSize: '15px',
-            lineHeight: 1.8,
-            color: 'var(--text-secondary)',
-            margin: 0,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}
-        >
-          {note.text}
-        </p>
+        <div className="note-reader-topbar-spacer" aria-hidden="true" />
+      </header>
 
-        {/* Reclassification UI */}
-        {showReclassify && (
-          <div
-            style={{
-              marginTop: '24px',
-              padding: '16px',
-              borderRadius: '12px',
-              background: 'var(--divider-bg)',
-              border: '1px solid var(--divider)',
-            }}
-          >
-            <p style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
-              Cambiar tipo
-            </p>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
-              {TYPE_OPTIONS.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setSelectedType(t)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    border: `1px solid ${selectedType === t ? 'var(--accent-primary)' : 'var(--divider)'}`,
-                    background: selectedType === t ? 'rgba(201,168,130,0.12)' : 'var(--bg-card)',
-                    color: selectedType === t ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  {TYPE_LABELS[t]}
-                </button>
-              ))}
-            </div>
+      <main className="note-reader-scroll">
+        <article className="note-reader-sheet">
+          <h1 className="note-reader-title">{note.title || 'Sin título'}</h1>
+          <div className="note-reader-rule" aria-hidden="true" />
+          <p className="note-reader-body">{note.text}</p>
+        </article>
+      </main>
 
-            {/* Quick corrections */}
-            <div style={{ display: 'grid', gap: '8px', marginBottom: '12px' }}>
-              <div>
-                <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                  Monto
-                </label>
-                <input
-                  type="number"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
-                  placeholder="Sin monto"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--divider-strong)',
-                    background: 'var(--bg-card)',
-                    color: 'var(--text-primary)',
-                    fontSize: '13px',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div>
-                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                    Fecha
-                  </label>
-                  <input
-                    type="date"
-                    value={editDate}
-                    onChange={(e) => setEditDate(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--divider-strong)',
-                      background: 'var(--bg-card)',
-                      color: 'var(--text-primary)',
-                      fontSize: '13px',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                    Hora
-                  </label>
-                  <input
-                    type="time"
-                    value={editTime}
-                    onChange={(e) => setEditTime(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--divider-strong)',
-                      background: 'var(--bg-card)',
-                      color: 'var(--text-primary)',
-                      fontSize: '13px',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={() => setShowReclassify(false)}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--divider)',
-                  background: 'transparent',
-                  color: 'var(--text-muted)',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleReclassify}
-                disabled={saving}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: 'var(--accent-primary)',
-                  color: 'var(--bg-void)',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  opacity: saving ? 0.6 : 1,
-                }}
-              >
-                {saving ? 'Guardando...' : 'Guardar cambios'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          gap: '12px',
-          padding: '16px 24px calc(16px + env(safe-area-inset-bottom, 0px))',
-          borderTop: '1px solid var(--divider)',
-          flexShrink: 0,
-        }}
-      >
+      <aside className="note-reader-floating-actions" aria-label="Acciones de nota">
         <button
           type="button"
-          className="btn-primary tap-target"
-          style={{ flex: 1 }}
+          className="note-reader-floating-action note-reader-floating-action-primary tap-target"
           onClick={handleEdit}
+          aria-label="Editar nota"
+          title="Editar"
         >
-          Editar
+          <EditIcon />
         </button>
-        {canReclassify && (
+        <button
+          type="button"
+          className="note-reader-floating-action tap-target"
+          onClick={handleCopy}
+          aria-label={copyLabel}
+          title={copyLabel}
+        >
+          <CopyIcon />
+        </button>
+        <button
+          type="button"
+          className="note-reader-floating-action tap-target"
+          onClick={handleShare}
+          aria-label={shareLabel}
+          title={shareLabel}
+        >
+          <ShareIcon />
+        </button>
+        {onTogglePinned && (
           <button
             type="button"
-            onClick={() => setShowReclassify(!showReclassify)}
-            style={{
-              width: '48px',
-              borderRadius: '10px',
-              background: 'rgba(201,168,130,0.12)',
-              border: '1px solid rgba(201,168,130,0.25)',
-              color: '#c9a882',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'opacity 0.15s ease',
-            }}
-            aria-label="Cambiar tipo"
-            title="Cambiar tipo"
+            className="note-reader-floating-action tap-target"
+            onClick={handleTogglePinned}
+            aria-label={isPinned ? 'Quitar destacado' : 'Destacar nota'}
+            aria-pressed={isPinned}
+            title={isPinned ? 'Destacado' : 'Destacar'}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
+            <StarIcon filled={isPinned} />
           </button>
         )}
-        <button
-          type="button"
-          className="tap-target"
-          style={{
-            width: '48px',
-            borderRadius: '10px',
-            background: 'rgba(196,112,112,0.12)',
-            border: '1px solid rgba(196,112,112,0.25)',
-            color: '#c47070',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            transition: 'opacity 0.15s ease',
-          }}
-          onClick={handleDelete}
-          aria-label="Eliminar"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 6h18" />
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-            <path d="M10 11v6M14 11v6" />
-            <path d="M9 6V4h6v2" />
-          </svg>
-        </button>
-      </div>
+        <span className="note-reader-action-status" aria-live="polite">
+          {statusLabel}
+        </span>
+      </aside>
     </div>
   );
 }
