@@ -12,7 +12,7 @@ The system must not depend on AI for basic classification. Deterministic rules, 
 - **Time extraction**: "a las 9", "9am", "3:30pm".
 - **Amount extraction**: "20k", "20 lucas", full numbers.
 - **Shopping lists**: comma-separated items classified into deterministic categories.
-- **Store detection**: supermercado, feria, farmacia, otro.
+- **Store detection**: supermercado, feria, farmacia, mall, cine, otro.
 - **Intro cleaning**: strips phrases like "comprar en el super" so only real products become checklist items.
 
 ## Cognitive Agent: `list_builder`
