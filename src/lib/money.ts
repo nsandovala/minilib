@@ -23,11 +23,12 @@ export function normalizeCLP(raw: string): number | null {
     return Math.round(parseFloat(kMatch[1]) * 1000);
   }
 
-  // "2 lucas" → 2000
-  const lucasMatch = cleaned.match(/^(\d+(?:[.,]\d{3})?)\s*lucas?$/);
+  // "2 lucas" → 2000, "1 luca" → 1000, "1.5 lucas" → 1500
+  // Una "luca" = 1.000 CLP, así que "N lucas" = N × 1000.
+  const lucasMatch = cleaned.match(/^(\d+(?:[.,]\d+)?)\s*lucas?$/);
   if (lucasMatch) {
-    const numStr = lucasMatch[1].replace(/[.,]/g, '');
-    return parseInt(numStr, 10);
+    const n = parseFloat(lucasMatch[1].replace(',', '.'));
+    if (!Number.isNaN(n)) return Math.round(n * 1000);
   }
 
   // "2.900", "12.500", "220.000", "1500"
