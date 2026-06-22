@@ -1,7 +1,8 @@
 'use client';
 
 import { db } from '@/db';
-import { ScheduledNotification } from '@/types';
+
+const MAX_TIMEOUT = 2_000_000_000; // ~23 días: límite seguro de setTimeout
 
 export async function requestPermission(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -14,22 +15,36 @@ export async function requestPermission(): Promise<boolean> {
   return result === 'granted';
 }
 
-export function showNotification(title: string, body: string): void {
+export async function showNotification(title: string, body: string): Promise<void> {
   if (typeof window === 'undefined') return;
 
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(title, {
-      body,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
-    });
-  } else {
-    window.dispatchEvent(
-      new CustomEvent('minilib:notify', {
-        detail: { title, body },
-      })
-    );
+  const opts = { body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png' };
+
+  // iOS (y navegadores modernos): la notificación DEBE salir por el service worker.
+  if ('serviceWorker' in navigator && 'Notification' in window && Notification.permission === 'granted') {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.showNotification(title, opts);
+        return;
+      }
+    } catch {
+      // cae a los fallbacks
+    }
   }
+
+  // Desktop sin SW activo: constructor clásico.
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(title, opts);
+      return;
+    } catch {
+      // iOS no soporta el constructor → cae al banner in-app
+    }
+  }
+
+  // Sin permiso o sin soporte: banner in-app.
+  window.dispatchEvent(new CustomEvent('minilib:notify', { detail: { title, body } }));
 }
 
 export async function scheduleNotification(opts: {
@@ -40,7 +55,7 @@ export async function scheduleNotification(opts: {
 }): Promise<void> {
   const msUntil = opts.scheduledAt.getTime() - Date.now();
 
-  if (msUntil > 0) {
+  if (msUntil > 0 && msUntil <= MAX_TIMEOUT) {
     setTimeout(() => {
       showNotification(opts.title, opts.body);
       db.scheduled_notifications
@@ -81,16 +96,29 @@ export async function cancelNotification(id: string): Promise<void> {
 }
 
 export async function replayPending(): Promise<void> {
-  const pending = await db.scheduled_notifications
-    .where('fired')
-    .equals(0)
-    .and((n: ScheduledNotification) => n.scheduledAt <= new Date())
-    .toArray();
+  const now = new Date();
+  const all = await db.scheduled_notifications.toArray(); // tabla chica, filtrado en memoria
+  for (const n of all) {
+    if (!n.fired && n.scheduledAt <= now) {
+      showNotification(n.title, n.body);
+      if (n.id !== undefined) {
+        await db.scheduled_notifications.update(n.id, { fired: true });
+      }
+    }
+  }
+}
 
-  for (const n of pending) {
-    showNotification(n.title, n.body);
-    if (n.id !== undefined) {
-      await db.scheduled_notifications.update(n.id, { fired: true });
+export async function rearmUpcoming(): Promise<void> {
+  const now = Date.now();
+  const all = await db.scheduled_notifications.toArray();
+  for (const n of all) {
+    if (n.fired) continue;
+    const msUntil = n.scheduledAt.getTime() - now;
+    if (msUntil > 0 && msUntil <= MAX_TIMEOUT) {
+      setTimeout(() => {
+        showNotification(n.title, n.body);
+        if (n.id !== undefined) db.scheduled_notifications.update(n.id, { fired: true });
+      }, msUntil);
     }
   }
 }

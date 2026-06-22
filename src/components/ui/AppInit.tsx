@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { requestPermission, replayPending, setBadge } from '@/lib/notifications';
+import { requestPermission, replayPending, rearmUpcoming, setBadge } from '@/lib/notifications';
 import { sync } from '@/lib/sync';
 import { useEntries } from '@/hooks/useEntries';
 import { getPendingCount } from '@/core/queries/entry-queries';
@@ -15,6 +15,7 @@ export default function AppInit(): null {
   useEffect(() => {
     requestPermission();
     replayPending();
+    rearmUpcoming();
   }, []);
 
   useEffect(() => {
