@@ -91,12 +91,8 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-[100]"
+      className="bottom-nav"
       style={{
-        padding: '0 12px 20px',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'flex-end',
         touchAction: 'manipulation',
       }}
     >

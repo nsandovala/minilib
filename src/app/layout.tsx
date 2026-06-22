@@ -99,7 +99,7 @@ export default function RootLayout({
             <div aria-hidden="true">
               <div className="bg-grain" />
             </div>
-            <main className="content-layer" style={{ paddingBottom: '72px' }}>
+            <main className="content-layer">
               {children}
             </main>
             <NotificationBanner />

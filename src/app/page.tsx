@@ -244,7 +244,7 @@ export default function HomePage() {
 
   if (!isLoaded) {
     return (
-      <div style={{ minHeight: '100vh', padding: '36px 24px 0' }}>
+      <div style={{ minHeight: '100%', padding: '36px 24px 0' }}>
         <div
           className="glass-card"
           style={{

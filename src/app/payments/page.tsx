@@ -495,7 +495,7 @@ export default function PaymentsPage() {
   const hasEntries = financeEntries.length > 0;
 
   return (
-    <div style={{ minHeight: '100vh', paddingBottom: 'calc(108px + env(safe-area-inset-bottom, 0px))' }}>
+    <div style={{ minHeight: '100%', paddingBottom: '24px' }}>
       <div style={{ padding: '36px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
           <div>

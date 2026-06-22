@@ -131,12 +131,17 @@
 
   html { font-size: 16px; -webkit-text-size-adjust: 100%; }
 
+  html, body { height: 100%; }
+
   body {
     font-family: var(--font);
     background-color: var(--bg-app);
     color: var(--text-primary);
-    min-height: 100vh;
-    overflow-x: hidden;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    overscroll-behavior: none;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -896,6 +901,20 @@
   .content-layer {
     position: relative;
     z-index: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bottom-nav {
+    position: relative;
+    z-index: 100;
+    flex: 0 0 auto;
+    padding: 0 12px calc(20px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
   }
 
   /* Responsive chip: Calendario → icon-only on narrow screens */
@@ -1020,17 +1039,17 @@
     opacity: 0.014;
   }
 
-  html[data-theme="light"] nav.fixed.bottom-0 > div {
+  html[data-theme="light"] .bottom-nav > div {
     background: rgba(255, 253, 247, 0.92) !important;
     border-color: rgba(191, 143, 72, 0.32) !important;
     box-shadow: 0 16px 36px rgba(116, 78, 31, 0.14) !important;
   }
 
-  html[data-theme="light"] nav.fixed.bottom-0 a {
+  html[data-theme="light"] .bottom-nav a {
     color: rgba(64, 51, 37, 0.5) !important;
   }
 
-  html[data-theme="light"] nav.fixed.bottom-0 a[style*="--accent-human"] {
+  html[data-theme="light"] .bottom-nav a[style*="--accent-human"] {
     background: rgba(191, 143, 72, 0.16) !important;
     color: var(--accent-primary) !important;
   }
