@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TimelineEntry, ChecklistItem, EntryType, ShoppingMetadata } from '@/types';
-import { toggleEntryDone, deleteEntry, reparseAndUpdateEntry, toggleShoppingItem } from '@/db/entries';
+import { toggleEntryDone, deleteEntry, reparseAndUpdateEntry, toggleShoppingItem, registerShoppingListPayment } from '@/db/entries';
 import { toggleChecklistItem } from '@/db/checklist';
 import { db } from '@/db';
 import { recordBelongsToActiveUser } from '@/lib/local-user';
@@ -122,6 +122,24 @@ function getDetailOriginal(entry: TimelineEntry): string {
   const title = getEntryDisplayTitle(entry).trim().toLowerCase();
   if (!original || original.toLowerCase() === title) return '';
   return original;
+}
+
+function getShoppingPaymentTotal(meta: ShoppingMetadata | null): number {
+  if (!meta || meta.listKind !== 'shopping') return 0;
+  const total = meta.progress.totalChecked > 0
+    ? meta.progress.totalChecked
+    : meta.progress.totalEstimated;
+  return total > 0 ? total : 0;
+}
+
+async function hasShoppingListPayment(entry: TimelineEntry): Promise<boolean> {
+  const allEntries = await db.entries.toArray();
+  return allEntries.some(
+    (candidate) =>
+      recordBelongsToActiveUser(candidate.ownerUserId) &&
+      candidate.type === 'payment' &&
+      candidate.tags.some((tag) => tag === `from_shopping:${entry.localId}`),
+  );
 }
 
 // ─── Progress label for shopping lists ───────────────────────────────────────
@@ -700,12 +718,14 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(entry.text);
   const [pinned, setPinned] = useState(isEntryPinned(entry));
+  const [optimisticDone, setOptimisticDone] = useState(entry.done);
+  const [paymentGate, setPaymentGate] = useState<null | { total: number }>(null);
+  const [editAmount, setEditAmount] = useState<number | null>(null);
+  const [paymentFeedback, setPaymentFeedback] = useState<string | null>(null);
 
-  const handleToggleDone = async () => {
-    if (entry.id === undefined) return;
-    await toggleEntryDone(entry.id, !entry.done);
-    onAction();
-  };
+  useEffect(() => {
+    if (!paymentGate) setOptimisticDone(entry.done);
+  }, [entry.done, paymentGate]);
 
   const handleDelete = async () => {
     if (entry.id === undefined) return;
@@ -822,6 +842,66 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
     ? getVisibleNextStep(entry, getEntryNextStep(entry), detailOriginal)
     : '';
 
+  const handleToggleDone = async () => {
+    if (entry.id === undefined) return;
+
+    const nextDone = !optimisticDone;
+    await toggleEntryDone(entry.id, nextDone);
+    setOptimisticDone(nextDone);
+
+    if (!nextDone) {
+      setPaymentGate(null);
+      setEditAmount(null);
+      onAction();
+      return;
+    }
+
+    if (entry.type === 'shopping_list' && metaShopping) {
+      const total = getShoppingPaymentTotal(metaShopping);
+      if (total > 0 && !(await hasShoppingListPayment(entry))) {
+        setPaymentGate({ total });
+        setEditAmount(null);
+        return;
+      }
+    }
+
+    onAction();
+  };
+
+  const closePaymentGate = () => {
+    setPaymentGate(null);
+    setEditAmount(null);
+  };
+
+  const showPaymentFeedback = (message: string) => {
+    setPaymentFeedback(message);
+    window.setTimeout(() => setPaymentFeedback(null), 2200);
+  };
+
+  const handleRegisterPayment = async (amountOverride?: number) => {
+    if (entry.id === undefined) return;
+    const paymentId = await registerShoppingListPayment(entry.id, amountOverride);
+    closePaymentGate();
+    if (paymentId !== null) {
+      showPaymentFeedback('Egreso registrado');
+      window.setTimeout(onAction, 700);
+      return;
+    }
+    onAction();
+  };
+
+  const handleDismissPaymentGate = () => {
+    closePaymentGate();
+    onAction();
+  };
+
+  const handleConfirmEditedPayment = async () => {
+    if (!editAmount || editAmount <= 0) return;
+    await handleRegisterPayment(editAmount);
+  };
+
+  const displayDone = paymentGate ? true : optimisticDone;
+
   return (
     <div
       id={`timeline-entry-${entry.localId}`}
@@ -831,7 +911,7 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
         display: 'flex',
         gap: '10px',
         alignItems: 'flex-start',
-        opacity: entry.done ? 0.42 : 1,
+        opacity: displayDone && !paymentGate ? 0.42 : 1,
         transition: 'opacity 0.2s ease',
         maxHeight: entry.type === 'note' ? 152 : undefined,
         overflow: entry.type === 'note' ? 'hidden' : undefined,
@@ -845,8 +925,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
           width: '20px',
           height: '20px',
           borderRadius: '50%',
-          border: `1.5px solid ${entry.done ? 'var(--accent-human)' : 'var(--glass-border)'}`,
-          background: entry.done ? 'var(--accent-human)' : 'transparent',
+          border: `1.5px solid ${displayDone ? 'var(--accent-human)' : 'var(--glass-border)'}`,
+          background: displayDone ? 'var(--accent-human)' : 'transparent',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
@@ -855,9 +935,9 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
           marginTop: '3px',
           transition: 'all 0.15s ease',
         }}
-        aria-label={entry.done ? 'Marcar pendiente' : 'Marcar completado'}
+        aria-label={displayDone ? 'Marcar pendiente' : 'Marcar completado'}
       >
-        {entry.done && (
+        {displayDone && (
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--bg-void)" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />
           </svg>
@@ -958,8 +1038,8 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
                     flex: 1,
                     fontSize: '13px',
                     fontWeight: 500,
-                    color: entry.done ? 'var(--text-secondary)' : 'var(--text-primary)',
-                    textDecoration: entry.done ? 'line-through' : 'none',
+                    color: displayDone ? 'var(--text-secondary)' : 'var(--text-primary)',
+                    textDecoration: displayDone ? 'line-through' : 'none',
                     lineHeight: 1.42,
                     wordBreak: 'break-word',
                   }}
@@ -1129,6 +1209,125 @@ function TimelineItem({ entry, checklistItems, onToggleItem, onAction, groupKey,
               )}
             </div>
           </button>
+        )}
+
+        {paymentGate && (
+          <div
+            style={{
+              marginTop: '10px',
+              padding: '10px',
+              borderRadius: '8px',
+              border: '1px solid var(--glass-border)',
+              background: 'rgba(201,168,130,0.08)',
+              display: 'grid',
+              gap: '8px',
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.4,
+              }}
+            >
+              Compra completada · Total {formatCLP(paymentGate.total)}
+            </p>
+            {editAmount !== null && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={editAmount}
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    setEditAmount(Number.isFinite(next) ? next : null);
+                  }}
+                  style={{
+                    width: '118px',
+                    background: 'var(--divider-bg)',
+                    border: '1px solid var(--glass-border)',
+                    borderRadius: '8px',
+                    padding: '6px 8px',
+                    fontSize: '12px',
+                    color: 'var(--text-primary)',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleConfirmEditedPayment}
+                  disabled={!editAmount || editAmount <= 0}
+                  style={{
+                    border: '1px solid var(--accent-human)',
+                    background: 'var(--accent-human)',
+                    color: 'var(--bg-void)',
+                    borderRadius: '8px',
+                    padding: '6px 9px',
+                    fontSize: '11px',
+                    cursor: editAmount && editAmount > 0 ? 'pointer' : 'default',
+                    opacity: editAmount && editAmount > 0 ? 1 : 0.45,
+                  }}
+                >
+                  Confirmar
+                </button>
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => handleRegisterPayment()}
+                style={{
+                  border: '1px solid var(--accent-human)',
+                  background: 'var(--accent-human)',
+                  color: 'var(--bg-void)',
+                  borderRadius: '8px',
+                  padding: '6px 9px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                }}
+              >
+                Registrar egreso
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditAmount(paymentGate.total)}
+                style={{
+                  border: '1px solid var(--glass-border)',
+                  background: 'transparent',
+                  color: 'var(--text-secondary)',
+                  borderRadius: '8px',
+                  padding: '6px 9px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                }}
+              >
+                Editar monto
+              </button>
+              <button
+                type="button"
+                onClick={handleDismissPaymentGate}
+                style={{
+                  border: '1px solid transparent',
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
+                  borderRadius: '8px',
+                  padding: '6px 4px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                }}
+              >
+                No ahora
+              </button>
+            </div>
+          </div>
+        )}
+
+        {paymentFeedback && (
+          <p style={{ margin: '8px 0 0', fontSize: '11px', color: 'var(--accent-human)' }}>
+            {paymentFeedback}
+          </p>
         )}
 
         {/* Expanded section — outside the button so interactive elements are valid */}

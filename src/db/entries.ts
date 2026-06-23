@@ -99,6 +99,21 @@ export async function createEntry(data: CreateEntryInput): Promise<number> {
     devLog('createEntry payload', payload);
     const id = await db.entries.add(payload);
 
+    // Recordatorio local (no bloqueante)
+    try {
+      const { maybeScheduleReminder } = await import('@/lib/reminders');
+      await maybeScheduleReminder({
+        localId,
+        type: data.type,
+        title: data.title,
+        text: data.text,
+        date: data.date ?? null,
+        time: data.time ?? null,
+      });
+    } catch (remErr) {
+      devError('schedule reminder failed', remErr);
+    }
+
     // Seed structured checklist items for shopping lists (backwards compat)
     if (data.type === 'shopping_list' && data.checklistItems?.length) {
       try {
@@ -148,17 +163,30 @@ export async function getEntries(): Promise<TimelineEntry[]> {
 
 /* ─── Finance bridge: shopping list → payment ─────────────────────────────── */
 
-async function ensureShoppingListPayment(entry: TimelineEntry): Promise<void> {
-  const meta = entry.metadata as ShoppingMetadata | undefined;
-  if (!meta || meta.listKind !== 'shopping') return;
+/**
+ * Registra el egreso de una lista de compras. Idempotente: si ya existe un
+ * payment con el tag from_shopping:{localId}, devuelve su id y no duplica.
+ * amountOverride permite confirmar un monto editado por el usuario.
+ * Devuelve el id del payment (nuevo o existente), o null si no aplica.
+ */
+export async function registerShoppingListPayment(
+  entryId: number,
+  amountOverride?: number,
+): Promise<number | null> {
+  const entry = await db.entries.get(entryId);
+  if (!entry) return null;
 
-  const total = meta.progress.totalChecked > 0
+  const meta = entry.metadata as ShoppingMetadata | undefined;
+  if (!meta || meta.listKind !== 'shopping') return null;
+
+  const computed = meta.progress.totalChecked > 0
     ? meta.progress.totalChecked
     : meta.progress.totalEstimated;
+  const total = amountOverride ?? computed;
+  if (!total || total <= 0) return null;
 
-  if (!total || total <= 0) return;
-
-  // Dedup: look for existing payment tagged with this shopping list
+  // Dedup primario por tag (cubre el caso de dos listas distintas del mismo
+  // local con igual total: el localId las distingue).
   const allEntries = await db.entries.toArray();
   const existing = allEntries.find(
     (e) =>
@@ -166,10 +194,9 @@ async function ensureShoppingListPayment(entry: TimelineEntry): Promise<void> {
       e.type === 'payment' &&
       e.tags.some((t) => t === `from_shopping:${entry.localId}`),
   );
+  if (existing?.id !== undefined) return existing.id as number;
 
-  if (existing) return;
-
-  await createEntry({
+  return createEntry({
     text: `Compra ${meta.storeType}`,
     type: 'payment',
     title: `Compra ${meta.storeType}`,
@@ -183,10 +210,6 @@ export async function toggleEntryDone(id: number, done: boolean): Promise<void> 
   if (!entry) return;
 
   await db.entries.update(id, { done, updatedAt: new Date(), syncedAt: null });
-
-  if (done && entry.type === 'shopping_list') {
-    await ensureShoppingListPayment(entry);
-  }
 
   if (done && entry.type === 'payment') {
     const currentMeta = (entry.metadata as Record<string, unknown>) ?? {};
@@ -297,6 +320,12 @@ export async function deleteEntry(id: number): Promise<void> {
   if (!entry) return;
   if (entry.localId) {
     await softDeleteChecklistItemsForEntry(entry.localId);
+    try {
+      const { cancelNotification } = await import('@/lib/notifications');
+      await cancelNotification(entry.localId);
+    } catch (remErr) {
+      devError('cancel reminder failed', remErr);
+    }
   }
   const now = new Date();
   await db.entries.update(id, { deletedAt: now, updatedAt: now, syncedAt: null });

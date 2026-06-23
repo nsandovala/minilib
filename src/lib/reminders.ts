@@ -6,7 +6,10 @@ const REMINDABLE: EntryType[] = ['appointment', 'health', 'payment', 'task', 're
 
 /** Combina date 'YYYY-MM-DD' + time 'HH:MM' (default 09:00) en un Date LOCAL. */
 export function buildScheduledAt(date: string, time: string | null): Date | null {
-  const t = time && /^\d{1,2}:\d{2}/.test(time) ? time : '09:00';
+  const raw = time?.trim();
+  const t = raw && /^\d{1,2}:\d{2}$/.test(raw) ? raw : '09:00'; // ancla $: rechaza "9:30am"
+  const [hh, mm] = t.split(':').map(Number);
+  if (hh > 23 || mm > 59) return null; // rechaza "24:00", "23:99"
   const d = new Date(`${date}T${t}`); // sin 'Z' = hora local (Chile)
   return Number.isNaN(d.getTime()) ? null : d;
 }

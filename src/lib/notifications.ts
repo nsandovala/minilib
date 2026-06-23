@@ -3,6 +3,31 @@
 import { db } from '@/db';
 
 const MAX_TIMEOUT = 2_000_000_000; // ~23 días: límite seguro de setTimeout
+const CATCHUP_CUTOFF_MS = 24 * 60 * 60 * 1000; // no notificar vencidos de +24h
+const MAX_CATCHUP = 3;
+const timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function armTimer(notifId: string, msUntil: number): void {
+  const existing = timers.get(notifId);
+  if (existing) {
+    clearTimeout(existing); // re-schedule no duplica
+    timers.delete(notifId);
+  }
+  if (msUntil > 0 && msUntil <= MAX_TIMEOUT) {
+    timers.set(notifId, setTimeout(() => { void fireIfPending(notifId); }, msUntil));
+  }
+}
+
+async function fireIfPending(notifId: string): Promise<void> {
+  const rec = await db.scheduled_notifications.where('notifId').equals(notifId).first();
+  if (!rec || rec.fired) {
+    timers.delete(notifId);
+    return;
+  }
+  await showNotification(rec.title, rec.body);
+  if (rec.id !== undefined) await db.scheduled_notifications.update(rec.id, { fired: true });
+  timers.delete(notifId);
+}
 
 export async function requestPermission(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -55,16 +80,6 @@ export async function scheduleNotification(opts: {
 }): Promise<void> {
   const msUntil = opts.scheduledAt.getTime() - Date.now();
 
-  if (msUntil > 0 && msUntil <= MAX_TIMEOUT) {
-    setTimeout(() => {
-      showNotification(opts.title, opts.body);
-      db.scheduled_notifications
-        .where('notifId')
-        .equals(opts.id)
-        .modify({ fired: true });
-    }, msUntil);
-  }
-
   const existing = await db.scheduled_notifications
     .where('notifId')
     .equals(opts.id)
@@ -86,24 +101,37 @@ export async function scheduleNotification(opts: {
       fired: false,
     });
   }
+
+  armTimer(opts.id, msUntil);
 }
 
-export async function cancelNotification(id: string): Promise<void> {
+export async function cancelNotification(notifId: string): Promise<void> {
+  const t = timers.get(notifId);
+  if (t) {
+    clearTimeout(t);
+    timers.delete(notifId);
+  }
   await db.scheduled_notifications
     .where('notifId')
-    .equals(id)
+    .equals(notifId)
     .modify({ fired: true });
 }
 
 export async function replayPending(): Promise<void> {
-  const now = new Date();
-  const all = await db.scheduled_notifications.toArray(); // tabla chica, filtrado en memoria
+  const now = Date.now();
+  const all = await db.scheduled_notifications.toArray();
+  const due = all
+    .filter((n) => !n.fired && n.scheduledAt.getTime() <= now && now - n.scheduledAt.getTime() <= CATCHUP_CUTOFF_MS)
+    .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime())
+    .slice(0, MAX_CATCHUP);
+  for (const n of due) {
+    await showNotification(n.title, n.body);
+    if (n.id !== undefined) await db.scheduled_notifications.update(n.id, { fired: true });
+  }
+  // Vencidos muy viejos: marcar fired sin notificar (evita que se acumulen para siempre)
   for (const n of all) {
-    if (!n.fired && n.scheduledAt <= now) {
-      showNotification(n.title, n.body);
-      if (n.id !== undefined) {
-        await db.scheduled_notifications.update(n.id, { fired: true });
-      }
+    if (!n.fired && now - n.scheduledAt.getTime() > CATCHUP_CUTOFF_MS && n.id !== undefined) {
+      await db.scheduled_notifications.update(n.id, { fired: true });
     }
   }
 }
@@ -114,12 +142,7 @@ export async function rearmUpcoming(): Promise<void> {
   for (const n of all) {
     if (n.fired) continue;
     const msUntil = n.scheduledAt.getTime() - now;
-    if (msUntil > 0 && msUntil <= MAX_TIMEOUT) {
-      setTimeout(() => {
-        showNotification(n.title, n.body);
-        if (n.id !== undefined) db.scheduled_notifications.update(n.id, { fired: true });
-      }, msUntil);
-    }
+    armTimer(n.notifId, msUntil);
   }
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { requestPermission, replayPending, rearmUpcoming, setBadge } from '@/lib/notifications';
 import { sync } from '@/lib/sync';
@@ -8,14 +8,15 @@ import { useEntries } from '@/hooks/useEntries';
 import { getPendingCount } from '@/core/queries/entry-queries';
 import { setActiveLocalUserId } from '@/lib/local-user';
 
-export default function AppInit(): null {
+export default function AppInit() {
   const { isSignedIn, isLoaded, userId } = useAuth();
   const entries = useEntries();
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | null>(null);
 
   useEffect(() => {
-    requestPermission();
-    replayPending();
-    rearmUpcoming();
+    if ('Notification' in window) setNotificationPermission(Notification.permission);
+    void replayPending();
+    void rearmUpcoming();
   }, []);
 
   useEffect(() => {
@@ -59,8 +60,9 @@ export default function AppInit(): null {
 
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && navigator.onLine && isLoaded && isSignedIn) {
-        sync()
+      if (document.visibilityState === 'visible') {
+        void rearmUpcoming();
+        if (navigator.onLine && isLoaded && isSignedIn) sync()
       }
     }
     document.addEventListener('visibilitychange', onVisible)
@@ -97,5 +99,37 @@ export default function AppInit(): null {
     }).catch(() => {});
   }, []);
 
-  return null;
+  const handleEnableReminders = () => {
+    void requestPermission().then(() => {
+      if ('Notification' in window) setNotificationPermission(Notification.permission);
+    });
+  };
+
+  if (!isLoaded || !isSignedIn || notificationPermission !== 'default') return null;
+
+  return (
+    <button
+      type="button"
+      className="glass-card"
+      onClick={handleEnableReminders}
+      style={{
+        position: 'fixed',
+        left: '50%',
+        bottom: 'calc(92px + env(safe-area-inset-bottom, 0px))',
+        transform: 'translateX(-50%)',
+        zIndex: 250,
+        width: 'max-content',
+        maxWidth: 'calc(100vw - 32px)',
+        padding: '10px 14px',
+        borderColor: 'var(--border-active)',
+        color: 'var(--text-primary)',
+        fontSize: '13px',
+        fontWeight: 600,
+        cursor: 'pointer',
+        boxShadow: 'var(--shadow-soft)',
+      }}
+    >
+      Activar recordatorios
+    </button>
+  );
 }
