@@ -370,7 +370,7 @@ export default function HomePage() {
                   </div>
                 </div>
                 <h2>Escribe como piensas</h2>
-                <p>Ejemplo: "pagar internet viernes 29990"</p>
+                <p>Ejemplo: &quot;pagar internet viernes 29990&quot;</p>
               </article>
               <article>
                 <div className="landing-step-top">
